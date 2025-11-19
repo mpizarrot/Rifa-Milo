@@ -114,6 +114,53 @@ def check_number(request):
         return HttpResponse('<span class="text-red-600">No disponible</span>')
     return HttpResponse('<span class="text-green-600">Disponible</span>')
 
+
+# ========= Confirmación de pago → creación de tickets =========
+
+def _confirm_tickets_from_payment_id(gateway_payment_id: str):
+    """
+    Marca Payment como paid (idempotente) y crea Tickets para cada número
+    en metadata['chosen_numbers'] (o 'chosen_number' legacy).
+    Requiere que Ticket.payment sea ForeignKey (no OneToOne).
+    """
+    with transaction.atomic():
+        try:
+            p = Payment.objects.select_for_update().get(gateway_payment_id=gateway_payment_id)
+        except Payment.DoesNotExist:
+            return False
+
+        # Marcar pagado si aún no
+        if p.status != "paid":
+            p.status = "paid"
+            p.paid_at = timezone.now()
+            p.save()
+
+        # Números a emitir
+        chosen_numbers = []
+        if isinstance(p.metadata, dict) and "chosen_numbers" in p.metadata:
+            chosen_numbers = [int(x) for x in p.metadata.get("chosen_numbers", [])]
+        elif getattr(p, "chosen_number", None):
+            chosen_numbers = [int(p.chosen_number)]
+
+        # Crear tickets por cada número (respetando UNIQUE(raffle, number))
+        for n in chosen_numbers:
+            try:
+                Ticket.objects.create(
+                    raffle=p.raffle,
+                    number=n,
+                    payment=p,
+                    buyer_name=p.buyer_name,
+                    buyer_email=p.buyer_email,
+                    buyer_phone=p.buyer_phone,
+                )
+            except IntegrityError:
+                # Choque por número ya tomado (concurrencia). Aquí podrías:
+                # - Registrar incidencia para reembolso/cambio
+                # - Guardar en p.metadata['conflicts'] = [...]
+                pass
+
+    return True
+
 # ========= Crear pedido Mercado Pago =========
 
 @csrf_exempt
@@ -228,10 +275,12 @@ def create_preference(request):
 @require_POST
 def mp_webhook(request):
     """
-    Webhook de notificaciones de Mercado Pago con validación HMAC
-    siguiendo literalmente el ejemplo oficial.
+    Webhook de notificaciones de Mercado Pago con validación HMAC.
+    - Validación estricta solo para notificaciones de tipo 'payment' con data.id.
+    - Cuando el pago queda approved+accredited, confirma Payment y crea Tickets
+      usando el preference_id (que guardamos como gateway_payment_id).
     """
-    # 1) Parsear body (solo para log y luego para topic/type)
+    # 1) Body solo para logging y para sacar 'type'
     try:
         payload = json.loads(request.body.decode() or "{}")
     except Exception:
@@ -241,7 +290,7 @@ def mp_webhook(request):
     print("   Method:", request.method)
     print("   Payload:", payload)
 
-    # 2) Obtener headers relevantes
+    # 2) Headers relevantes
     xSignature = request.headers.get("x-signature") or request.META.get("HTTP_X_SIGNATURE", "")
     xRequestId = request.headers.get("x-request-id") or request.META.get("HTTP_X_REQUEST_ID", "")
 
@@ -252,18 +301,30 @@ def mp_webhook(request):
         print("   >> Falta x-signature, ignorando notificación (pero respondo 200)")
         return HttpResponse("missing signature", status=200)
 
-    # 3) Obtener Query params desde la URL (Django)
-    query_string = request.META.get("QUERY_STRING", "")  # equivalente a request.url.query
+    # 3) Query params (equivalente a request.url.query)
+    query_string = request.META.get("QUERY_STRING", "")
     queryParams = urllib.parse.parse_qs(query_string)
 
-    # data.id primero (payments), si no, id (merchant_order)
+    # data.id primero (payments), si no, id (merchant_order / otros)
     dataID = queryParams.get("data.id", [""])[0] or queryParams.get("id", [""])[0]
     print("   data.id (url):", dataID)
+
+    # Tipo de notificación: payment / merchant_order / etc
+    notif_type = str(
+        queryParams.get("type", [""])[0]
+        or payload.get("type")
+        or payload.get("topic")
+        or ""
+    ).lower()
+
+    print("   notif_type:", notif_type, "dataID:", dataID)
+
+    # Solo exigimos HMAC estricto cuando es payment con data.id
+    require_strict_hmac = (notif_type == "payment" and bool(dataID))
 
     # 4) Separar ts y v1 del x-signature
     ts = None
     hash_v1 = None
-
     parts = xSignature.split(",")
     for part in parts:
         keyValue = part.split("=", 1)
@@ -282,8 +343,7 @@ def mp_webhook(request):
         print("   >> No se encontró v1 en x-signature, ignorando notificación")
         return HttpResponse("invalid signature format", status=200)
 
-    # 5) Construir el manifest EXACTAMENTE como indica MP
-    #    manifest = f"id:{dataID};request-id:{xRequestId};ts:{ts};"
+    # 5) Construir manifest EXACTAMENTE como indica MP
     manifest_parts = []
     if dataID:
         manifest_parts.append(f"id:{dataID}")
@@ -301,7 +361,7 @@ def mp_webhook(request):
 
     if not secret:
         print("   >> MP_WEBHOOK_SECRET no configurado, NO se valida firma (solo dev)")
-        # En dev podemos dejar pasar todo, pero en prod deberías devolver 200 e ignorar
+        # En dev puedes dejar pasar todo, en prod deberías dejar esto en False
         return HttpResponse("secret not configured", status=200)
 
     # 7) Crear HMAC SHA256(manifest, secret)
@@ -311,23 +371,20 @@ def mp_webhook(request):
     print("   computed HMAC:", sha)
     print("   header v1:", hash_v1)
 
-    if sha != hash_v1:
-        print("   >> HMAC verification FAILED, ignorando notificación")
+    if require_strict_hmac and sha != hash_v1:
+        print("   >> HMAC verification FAILED para payment, ignorando notificación")
         return HttpResponse("invalid signature", status=200)
 
-    print("   >> HMAC verification PASSED")
+    if require_strict_hmac:
+        print("   >> HMAC verification PASSED para payment")
+    else:
+        # Para merchant_order / otros, solo logueamos; pueden no calzar con este manifest
+        if sha != hash_v1:
+            print("   >> HMAC mismatch en tópico no crítico (p.ej. merchant_order). Solo log.")
+        else:
+            print("   >> HMAC match en tópico no crítico.")
 
-    # 8) A partir de aquí, CONFÍAS en que viene de MP
-
-    # Tipo de notificación: payment / merchant_order / etc
-    notif_type = str(
-        queryParams.get("type", [""])[0]
-        or payload.get("type")
-        or payload.get("topic")
-        or ""
-    ).lower()
-
-    print("   notif_type:", notif_type, "dataID:", dataID)
+    # === A partir de aquí, si es payment+data.id y HMAC es válido, confiamos en el evento ===
 
     # Caso payment → consultamos /v1/payments/{id}
     if notif_type == "payment" and dataID:
@@ -341,23 +398,32 @@ def mp_webhook(request):
             return HttpResponse("fetch error", status=200)
 
         pdata = pr.json()
-        pstatus = (pdata.get("status") or "").lower()
-        pdetail = (pdata.get("status_detail") or "").lower()
-        print("   payment status:", pstatus, "detail:", pdetail)
+        pstatus = (pdata.get("status") or "").lower()          # approved / rejected / pending...
+        pdetail = (pdata.get("status_detail") or "").lower()   # accredited / ...
+        preference_id = str(pdata.get("preference_id") or "")
+        external_ref  = str(pdata.get("external_reference") or "")
 
-        # Aquí puedes mapear a tu Payment/Tickets;
-        # de momento solo respondemos OK
+        print("   payment status:", pstatus, "detail:", pdetail)
+        print("   preference_id:", preference_id, "external_reference:", external_ref)
+
+        # Confirmar pago y crear tickets cuando esté approved+accredited
+        if pstatus == "approved" and pdetail == "accredited" and preference_id:
+            # Reutilizamos tu helper: gateway_payment_id = preference_id
+            print("   >> Pago aprobado, confirmando tickets para preference_id:", preference_id)
+            _confirm_tickets_from_payment_id(preference_id)
+        elif pstatus in ("rejected", "cancelled") and preference_id:
+            print("   >> Pago rechazado/cancelado, marcando Payment como failed:", preference_id)
+            Payment.objects.filter(gateway_payment_id=preference_id).update(status="failed")
+
         return HttpResponse("ok", status=200)
 
-    # Caso merchant_order (si quieres hacer algo)
+    # Caso merchant_order (solo log por ahora)
     if notif_type == "merchant_order" and dataID:
-        # Podrías consultar merchant_orders, etc.
         print("   merchant_order id:", dataID)
         return HttpResponse("ok", status=200)
 
-    # Otros tópicos → responder 200 para que no reintente eternamente
+    # Otros tópicos → responder 200 para que MP no reintente eternamente
     return HttpResponse("ignored", status=200)
-
 
 # ============== exportación csv ======================== #
 
