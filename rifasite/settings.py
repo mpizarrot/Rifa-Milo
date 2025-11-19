@@ -79,4 +79,4 @@ MP_ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN")
 MP_PUBLIC_KEY = os.getenv("MP_PUBLIC_KEY")
 MP_WEBHOOK_SECRET = os.getenv("MP_WEBHOOK_SECRET")
 MP_CURRENCY = "CLP"
-MP_PUBLIC_BASE_URL = "https://lauretta-nonelementary-vociferously.ngrok-free.dev"
+MP_PUBLIC_BASE_URL = os.getenv("MP_PUBLIC_BASE_URL")
