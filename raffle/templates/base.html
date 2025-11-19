@@ -1,0 +1,40 @@
+{% load static %}
+<!doctype html>
+<html lang="es" class="h-full">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Rifa Milo{% endblock %}</title>
+
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script>
+    // CSRF para HTMX (lee cookie)
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+    document.addEventListener("htmx:configRequest", (e) => {
+      const csrftoken = getCookie("csrftoken");
+      if (csrftoken) e.detail.headers["X-CSRFToken"] = csrftoken;
+    });
+  </script>
+</head>
+
+<body class="min-h-full bg-gray-50 text-gray-900">
+  <div class="max-w-5xl mx-auto p-4">
+    {% block content %}{% endblock %}
+  </div>
+
+  <!-- SDK Mercado Pago (necesario antes de mercadopago_brick.js) -->
+  <script src="https://sdk.mercadopago.com/js/v2"></script>
+
+  <!-- JS externos -->
+  <script src="{% static 'js/checkout_pro.js' %}" defer></script>
+  <script src="{% static 'js/detail_page.js' %}" defer></script>
+
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,32 @@
+<div class="gap-2 grid" style="grid-template-columns: repeat(10, minmax(0,1fr));">
+  {% for n in numbers %}
+    {% if n in taken %}
+      <button disabled
+              class="px-2 py-1 text-xs bg-gray-300 rounded cursor-not-allowed"
+              data-number="{{ n }}">{{ n }}</button>
+    {% else %}
+      <button class="px-2 py-1 text-xs bg-white border rounded hover:bg-blue-50 number-btn"
+              data-number="{{ n }}">{{ n }}</button>
+    {% endif %}
+  {% endfor %}
+</div>
+
+<div class="flex justify-center items-center gap-4 mt-3">
+  <button
+    class="px-3 py-1 border rounded"
+    hx-get="{% url 'grid_page' %}?page={{ current_page|add:'-1' }}"
+    hx-target="#numbers-grid"
+    hx-swap="innerHTML"
+    {% if current_page <= 1 %}disabled class="px-3 py-1 border rounded opacity-50 cursor-not-allowed"{% endif %}
+    aria-label="Anterior">◀︎</button>
+
+  <span class="text-sm">{{ current_page }} / {{ page_count }}</span>
+
+  <button
+    class="px-3 py-1 border rounded"
+    hx-get="{% url 'grid_page' %}?page={{ current_page|add:'1' }}"
+    hx-target="#numbers-grid"
+    hx-swap="innerHTML"
+    {% if current_page >= page_count %}disabled class="px-3 py-1 border rounded opacity-50 cursor-not-allowed"{% endif %}
+    aria-label="Siguiente">▶︎</button>
+</div>

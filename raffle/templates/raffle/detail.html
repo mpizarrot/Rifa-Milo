@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}{{ raffle.title|default:"Rifa Milo" }}{% endblock %}
+
+{% block content %}
+{% if not raffle %}
+  <div class="p-6 bg-white rounded-xl shadow">No hay rifa activa por ahora.</div>
+{% else %}
+
+<!-- Config para JS externos -->
+<div id="mp-config"
+     data-public-key="{{ MP_PUBLIC_KEY }}"
+     data-price="{{ raffle.price_clp }}"
+     data-raffle-id="{{ raffle.id }}">
+</div>
+
+<div class="mb-6">
+  <h1 class="text-2xl font-bold">{{ raffle.title }}</h1>
+  <p class="text-gray-600">{{ raffle.description }}</p>
+  <p class="mt-2">Precio por número: <span class="font-semibold">${{ raffle.price_clp }}</span> CLP</p>
+  {% if request.GET.ok %}<p class="text-green-700 mt-2">¡Pago confirmado!</p>{% endif %}
+</div>
+
+<div class="grid md:grid-cols-3 gap-6">
+  <!-- Grilla 10x10 con paginación -->
+  <div class="md:col-span-2">
+    <h2 class="font-semibold mb-2">Elige tus números</h2>
+
+    <!-- Contenedor de la grilla -->
+    <div id="numbers-grid"
+        hx-trigger="refreshGrid from:body"
+        hx-get="{% url 'grid_page' %}?page={{ current_page }}"
+        hx-target="#numbers-grid"
+        hx-swap="innerHTML">
+      {% include "raffle/_grid.html" with numbers=first_page_numbers taken=taken current_page=current_page page_count=page_count %}
+    </div>
+
+    <div id="availability" class="text-sm text-gray-600 mt-3">
+      Toca para seleccionar/deseleccionar números disponibles.
+    </div>
+  </div>
+
+  <!-- Formulario comprador + resumen (igual que antes) -->
+  <div class="bg-white rounded-xl shadow p-4">
+    <h2 class="font-semibold mb-2">Tus datos</h2>
+
+    <label class="block text-sm font-medium mb-1">Nombre</label>
+    <input id="buyer_name" type="text" class="w-full border rounded px-3 py-2 mb-2" required>
+
+    <label class="block text-sm font-medium mb-1">Email</label>
+    <input id="buyer_email" type="email" class="w-full border rounded px-3 py-2 mb-2" required>
+
+    <label class="block text-sm font-medium mb-1">Teléfono</label>
+    <input id="buyer_phone" type="text" class="w-full border rounded px-3 py-2 mb-4">
+
+    <div class="rounded-lg border p-3 text-sm bg-gray-50 mb-4">
+      <div><strong>Seleccionados:</strong> <span id="selected-count">0</span></div>
+      <div class="truncate"><strong>Números:</strong> <span id="selected-list">—</span></div>
+      <div class="mt-1"><strong>Total:</strong> $<span id="selected-total">0</span> CLP</div>
+    </div>
+    
+    <div id="walletBrick_container" class="mt-4"></div>
+  </div>
+</div>
+
+{% endif %}
+{% endblock %}
