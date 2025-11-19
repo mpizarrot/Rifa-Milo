@@ -114,53 +114,6 @@ def check_number(request):
         return HttpResponse('<span class="text-red-600">No disponible</span>')
     return HttpResponse('<span class="text-green-600">Disponible</span>')
 
-
-# ========= Confirmación de pago → creación de tickets =========
-
-def _confirm_tickets_from_payment_id(gateway_payment_id: str):
-    """
-    Marca Payment como paid (idempotente) y crea Tickets para cada número
-    en metadata['chosen_numbers'] (o 'chosen_number' legacy).
-    Requiere que Ticket.payment sea ForeignKey (no OneToOne).
-    """
-    with transaction.atomic():
-        try:
-            p = Payment.objects.select_for_update().get(gateway_payment_id=gateway_payment_id)
-        except Payment.DoesNotExist:
-            return False
-
-        # Marcar pagado si aún no
-        if p.status != "paid":
-            p.status = "paid"
-            p.paid_at = timezone.now()
-            p.save()
-
-        # Números a emitir
-        chosen_numbers = []
-        if isinstance(p.metadata, dict) and "chosen_numbers" in p.metadata:
-            chosen_numbers = [int(x) for x in p.metadata.get("chosen_numbers", [])]
-        elif getattr(p, "chosen_number", None):
-            chosen_numbers = [int(p.chosen_number)]
-
-        # Crear tickets por cada número (respetando UNIQUE(raffle, number))
-        for n in chosen_numbers:
-            try:
-                Ticket.objects.create(
-                    raffle=p.raffle,
-                    number=n,
-                    payment=p,
-                    buyer_name=p.buyer_name,
-                    buyer_email=p.buyer_email,
-                    buyer_phone=p.buyer_phone,
-                )
-            except IntegrityError:
-                # Choque por número ya tomado (concurrencia). Aquí podrías:
-                # - Registrar incidencia para reembolso/cambio
-                # - Guardar en p.metadata['conflicts'] = [...]
-                pass
-
-    return True
-
 # ========= Crear pedido Mercado Pago =========
 
 @csrf_exempt
