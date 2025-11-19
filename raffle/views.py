@@ -251,9 +251,11 @@ def create_preference(request):
         )
 
     preference_id = body["id"]
+    external_reference = pref_body["external_reference"]
 
+    # Guarda Payment "pendiente" asociado al external_reference
     Payment.objects.update_or_create(
-        gateway_payment_id=preference_id,
+        gateway_payment_id=external_reference,
         defaults=dict(
             raffle=raffle,
             amount_clp=total,
@@ -261,8 +263,11 @@ def create_preference(request):
             buyer_name=buyer.get("name", "S/N"),
             buyer_email=buyer.get("email", ""),
             buyer_phone=buyer.get("phone", ""),
-            chosen_number=0,
-            metadata={"chosen_numbers": chosen_numbers},
+            chosen_number=0,  # seguimos usando chosen_numbers en metadata
+            metadata={
+                "chosen_numbers": chosen_numbers,
+                "mp_preference_id": preference_id,  # opcional, por si quieres tenerlo guardado
+            },
             gateway="mercadopago",
         ),
     )
@@ -407,10 +412,9 @@ def mp_webhook(request):
         print("   preference_id:", preference_id, "external_reference:", external_ref)
 
         # Confirmar pago y crear tickets cuando esté approved+accredited
-        if pstatus == "approved" and pdetail == "accredited" and preference_id:
-            # Reutilizamos tu helper: gateway_payment_id = preference_id
-            print("   >> Pago aprobado, confirmando tickets para preference_id:", preference_id)
-            _confirm_tickets_from_payment_id(preference_id)
+        if pstatus == "approved" and pdetail == "accredited" and external_ref:
+            print("   >> Pago aprobado, confirmando tickets para external_ref:", external_ref)
+            _confirm_tickets_from_payment_id(external_ref)
         elif pstatus in ("rejected", "cancelled") and preference_id:
             print("   >> Pago rechazado/cancelado, marcando Payment como failed:", preference_id)
             Payment.objects.filter(gateway_payment_id=preference_id).update(status="failed")
