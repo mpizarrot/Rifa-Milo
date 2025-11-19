@@ -185,7 +185,6 @@ def create_preference(request):
     total = int(raffle.price_clp) * quantity
     external_reference = f"raffle-{raffle.id}-{int(timezone.now().timestamp())}"
 
-    # Base pública (ngrok) – NO dependemos del host de la request
     base_url = getattr(settings, "MP_PUBLIC_BASE_URL", request.build_absolute_uri("/").rstrip("/"))
 
     success_url = f"{base_url}/?ok=1"
@@ -204,6 +203,8 @@ def create_preference(request):
                 "quantity": quantity,
                 "unit_price": float(raffle.price_clp),
                 "currency_id": "CLP",
+                "category_id": "services",
+                "description": f"Participación en la rifa '{raffle.title}' con {quantity} número(s)",
             }
         ],
         "back_urls": {
@@ -211,7 +212,6 @@ def create_preference(request):
             "failure": failure_url,
             "pending": pending_url,
         },
-        # Reintentamos auto_return SOLO si estamos en https (ngrok / prod)
         "external_reference": external_reference,
         "metadata": {
             "chosen_numbers": chosen_numbers,
@@ -221,7 +221,6 @@ def create_preference(request):
         "notification_url": notification_url,
     }
 
-    # si quieres probar auto_return de nuevo:
     if base_url.startswith("https://"):
         pref_body["auto_return"] = "approved"
 

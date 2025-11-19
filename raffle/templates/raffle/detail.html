@@ -17,7 +17,25 @@
   <h1 class="text-2xl font-bold">{{ raffle.title }}</h1>
   <p class="text-gray-600">{{ raffle.description }}</p>
   <p class="mt-2">Precio por número: <span class="font-semibold">${{ raffle.price_clp }}</span> CLP</p>
-  {% if request.GET.ok %}<p class="text-green-700 mt-2">¡Pago confirmado!</p>{% endif %}
+  
+  {% if request.GET.ok %}
+    <p class="text-green-700 mt-2">
+      ¡Pago confirmado!
+    </p>
+  {% endif %}
+
+  {% if request.GET.fail %}
+    <p class="text-red-700 mt-2">
+      El pago fue rechazado o falló. Puedes intentar nuevamente.
+    </p>
+  {% endif %}
+
+  {% if request.GET.pending %}
+    <p class="text-yellow-700 mt-2">
+      Tu pago está pendiente de aprobación. Te notificaremos por correo.
+    </p>
+  {% endif %}
+
 </div>
 
 <div class="grid md:grid-cols-3 gap-6">
