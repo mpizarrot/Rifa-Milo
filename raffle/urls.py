@@ -12,6 +12,7 @@ urlpatterns = [
 
     # MP
     path("mp/create_preference/", views.create_preference, name="create_preference"),
-    path("webhook/mercadopago/", views.mp_webhook, name="mp_webhook")
+    path("webhook/mercadopago/", views.mp_webhook, name="mp_webhook"),
+    path("transfer/reserve/", views.transfer_reserve, name="transfer_reserve")
 ]
 

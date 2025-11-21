@@ -17,48 +17,102 @@ document.addEventListener("DOMContentLoaded", () => {
   const buyerNameInput = document.getElementById("buyer_name");
   const buyerEmailInput = document.getElementById("buyer_email");
   const buyerPhoneInput = document.getElementById("buyer_phone");
+  const walletContainer = document.getElementById("walletBrick_container");
 
   const mp = new MercadoPago(publicKey, { locale: "es-CL" });
   const bricksBuilder = mp.bricks();
 
-  let walletRendered = false;
-  let creatingPreference = false; // para evitar múltiples requests en paralelo
+  let creatingPreference = false;
+  let walletController = null;
+  let lastSignature = null; // para no recrear si nada cambió
 
-  async function createWalletIfNeeded() {
-    console.log("[checkout_pro] createWalletIfNeeded llamado");
-    if (walletRendered) {
-      console.log("[checkout_pro] ya hay walletRendered, salgo");
-      return;
-    }
-    if (creatingPreference) {
-      console.log("[checkout_pro] ya se está creando una preferencia, salgo");
-      return;
-    }
-
-    const name = buyerNameInput?.value.trim();
-    const email = buyerEmailInput?.value.trim();
-    const phone = buyerPhoneInput?.value.trim();
+  async function createOrUpdateWallet() {
+    console.log("[checkout_pro] createOrUpdateWallet llamado");
 
     const selectedSet = window.selected;
-    console.log("[checkout_pro] selectedSet:", selectedSet);
-
     if (!selectedSet || !(selectedSet instanceof Set)) {
       console.error("[checkout_pro] window.selected no está definido o no es un Set.");
       return;
     }
 
-    const selectedNumbers = Array.from(selectedSet).sort((a, b) => a - b);
-    console.log("[checkout_pro] selectedNumbers:", selectedNumbers);
-    console.log("[checkout_pro] name:", name, "email:", email);
+    const name = buyerNameInput?.value.trim() || "";
+    const email = buyerEmailInput?.value.trim() || "";
+    const phone = buyerPhoneInput?.value.trim() || "";
 
-    // Condiciones para mostrar el botón de MP
-    if (!name || !email || !email.includes("@") || selectedNumbers.length === 0) {
-      console.log("[checkout_pro] condiciones NO cumplidas, no creo preferencia todavía");
-      return; // aún no estamos listos
+    const selectedNumbers = Array.from(selectedSet).sort((a, b) => a - b);
+    const hasSelection = selectedNumbers.length > 0;
+    const hasBuyer = name && email && email.includes("@");
+    const readyForPayment = hasSelection && hasBuyer;
+
+    console.log("[checkout_pro] estado:", {
+      selectedNumbers,
+      name,
+      email,
+      hasSelection,
+      hasBuyer,
+      readyForPayment,
+    });
+
+    // Si NO estamos listos para pagar: ocultar y desmontar si existe
+    if (!readyForPayment) {
+      console.log("[checkout_pro] no listo para pagar, desmontando wallet si existe");
+      lastSignature = null;
+
+      if (walletController) {
+        try {
+          walletController.unmount();
+        } catch (err) {
+          console.warn("[checkout_pro] error al unmount wallet:", err);
+        }
+        walletController = null;
+      }
+
+      if (walletContainer) {
+        walletContainer.classList.add("hidden");
+        walletContainer.innerHTML = "";
+      }
+      return;
+    }
+
+    // Desde aquí sí estamos listos para pagar
+    if (walletContainer) {
+      walletContainer.classList.remove("hidden");
+    }
+
+    // Crear firma del estado actual (para no recrear si es igual)
+    const signature = JSON.stringify({
+      numbers: selectedNumbers,
+      name,
+      email,
+      phone,
+    });
+
+    if (signature === lastSignature && walletController) {
+      console.log("[checkout_pro] estado no cambió, no recreo wallet");
+      return;
+    }
+
+    // Si cambió algo, guardamos firma y recreamos
+    lastSignature = signature;
+
+    if (creatingPreference) {
+      console.log("[checkout_pro] ya se está creando una preferencia, salgo");
+      return;
     }
 
     creatingPreference = true;
-    console.log("[checkout_pro] condiciones OK, creando preferencia...");
+
+    // Desmontar wallet anterior si existía
+    if (walletController) {
+      try {
+        walletController.unmount();
+      } catch (err) {
+        console.warn("[checkout_pro] error al unmount previo wallet:", err);
+      }
+      walletController = null;
+    }
+
+    console.log("[checkout_pro] creando preferencia con números:", selectedNumbers);
 
     let resp;
     try {
@@ -97,25 +151,23 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("[checkout_pro] preferenceId:", preferenceId);
 
     try {
-      await bricksBuilder.create("wallet", "walletBrick_container", {
+      walletController = await bricksBuilder.create("wallet", "walletBrick_container", {
         initialization: {
           preferenceId: preferenceId,
         },
       });
-      walletRendered = true;
-      creatingPreference = false;
       console.log("[checkout_pro] Wallet Brick creado OK");
     } catch (err) {
       console.error("[checkout_pro] Error creando Wallet Brick:", err);
+      walletController = null;
+    } finally {
       creatingPreference = false;
-      return;
     }
   }
 
   // Esta función se llamará desde detail_page.js cada vez que cambie algo relevante
   window.updateWalletIfReady = () => {
     console.log("[checkout_pro] window.updateWalletIfReady disparado");
-    // no esperamos el promise, solo lo disparamos
-    createWalletIfNeeded();
+    createOrUpdateWallet();
   };
 });

@@ -1,8 +1,6 @@
 (function () {
   "use strict";
 
-  console.log("[detail_page] init");
-
   const priceEl = document.getElementById("mp-config");
   const PRICE = Number(priceEl?.dataset.price || "0");
 
@@ -16,29 +14,44 @@
   const buyerEmail = document.getElementById("buyer_email");
   const buyerPhone = document.getElementById("buyer_phone");
 
+  const walletContainer = document.getElementById("walletBrick_container");
+  const transferSection = document.getElementById("transfer-section");
+  const transferBtn = document.getElementById("transfer-btn");
+  const transferMsg = document.getElementById("transfer-message");
+
   // Set global para que lo use checkout_pro.js
   const selected = new Set();
   window.selected = selected;
-  console.log("[detail_page] window.selected inicializado");
 
   function refreshSummary() {
     const arr = Array.from(selected).sort((a, b) => a - b);
-    selCount.textContent = String(arr.length);
+    selCount.textContent = arr.length;
     selList.textContent = arr.length ? arr.join(", ") : "—";
-
     const total = PRICE * arr.length;
-    selTotal.textContent = String(total);
+    selTotal.textContent = total.toLocaleString("es-CL");
 
-    console.log("[detail_page] refreshSummary -> count:", arr.length);
+    const name = buyerName?.value.trim() || "";
+    const email = buyerEmail?.value.trim() || "";
+    const hasSelection = arr.length > 0;
+    const hasBuyer = name && email && email.includes("@");
+    const readyForPayment = hasSelection && hasBuyer;
 
-    // Avisar al módulo de pago que algo cambió
+    // 🔹 SIEMPRE avisamos a checkout_pro que algo cambió
     if (typeof window.updateWalletIfReady === "function") {
-      console.log("[detail_page] llamando updateWalletIfReady()");
       window.updateWalletIfReady();
-    } else {
-      console.log("[detail_page] updateWalletIfReady aún no definido");
+    }
+
+    // 🔹 Transferencia: opcional que dependa de readyForPayment
+    if (transferSection) {
+      if (readyForPayment) {
+        transferSection.classList.remove("hidden");
+      } else {
+        transferSection.classList.add("hidden");
+        transferMsg.textContent = "";
+      }
     }
   }
+
 
   function toggleSelected(btn) {
     const n = Number(btn.dataset.number);
@@ -53,7 +66,6 @@
       btn.classList.remove("bg-white");
       btn.classList.add("bg-blue-600", "text-white", "border-blue-600");
     }
-    console.log("[detail_page] toggleSelected -> seleccionado", n, "size:", selected.size);
     refreshSummary();
   }
 
@@ -67,7 +79,6 @@
   // Cambios en datos comprador → también disparan updateWalletIfReady
   [buyerName, buyerEmail, buyerPhone].forEach((el) => {
     el?.addEventListener("input", () => {
-      console.log("[detail_page] cambio en input comprador");
       refreshSummary();
     });
   });
@@ -85,6 +96,58 @@
       });
     }
   });
+
+    async function reserveByTransfer() {
+    if (!window.selected || !(window.selected instanceof Set)) {
+      alert("Error interno: selección no disponible.");
+      return;
+    }
+
+    const numbers = Array.from(window.selected).sort((a, b) => a - b);
+    const name = buyerName?.value.trim();
+    const email = buyerEmail?.value.trim();
+    const phone = buyerPhone?.value.trim();
+
+    if (!numbers.length) {
+      alert("Primero selecciona al menos un número.");
+      return;
+    }
+    if (!name || !email || !email.includes("@")) {
+      alert("Debes ingresar tu nombre y un correo válido.");
+      return;
+    }
+
+    transferMsg.textContent = "Creando reserva para transferencia...";
+
+    const resp = await fetch("/transfer/reserve/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chosen_numbers: numbers,
+        buyer: { name, email, phone },
+      }),
+    });
+
+    const data = await resp.json().catch(() => ({}));
+
+    if (!resp.ok || !data.ok) {
+      const msg = data.error || "No se pudo crear la reserva.";
+      transferMsg.textContent = msg;
+      return;
+    }
+
+    window.selected.clear();
+    refreshSummary();
+    document.body.dispatchEvent(new Event("refreshGrid"));
+
+    const until = data.reserved_until || "";
+    transferMsg.textContent =
+      `Tus números han sido reservados para transferencia. ` +
+      `Tienes 12 horas para realizarla. ` +
+      (until ? `Reserva válida hasta: ${until}` : "");
+  }
+
+  transferBtn?.addEventListener("click", reserveByTransfer);
 
   // Init
   refreshSummary();

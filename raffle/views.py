@@ -1,4 +1,6 @@
 import json, requests, csv, hmac, hashlib, urllib.parse
+from datetime import timedelta
+from uuid import uuid4
 
 from math import ceil
 from django.conf import settings
@@ -21,6 +23,36 @@ ZERO_DECIMAL_CURRENCIES = {"CLP", "JPY", "PYG"}
 
 def _get_active_raffle():
     return Raffle.objects.filter(is_active=True).order_by("id").first()
+
+def _get_taken_numbers_for_raffle(raffle: Raffle) -> set[int]:
+    """
+    Devuelve un set con todos los números que deben aparecer como 'tomados':
+    - Tickets ya emitidos (pagos confirmados).
+    - Reservas por transferencia pendientes y no vencidas.
+    """
+    taken = set(
+        Ticket.objects.filter(raffle=raffle).values_list("number", flat=True)
+    )
+
+    now = timezone.now()
+    pending_transfers = Payment.objects.filter(
+        raffle=raffle,
+        gateway="transfer",
+        status="pending",
+        expires_at__gt=now,
+    )
+
+    for p in pending_transfers:
+        meta = p.metadata or {}
+        if isinstance(meta, dict):
+            nums = meta.get("chosen_numbers", [])
+            for n in nums:
+                try:
+                    taken.add(int(n))
+                except (TypeError, ValueError):
+                    continue
+
+    return taken
 
 def _mp_headers(idempotency_key: str | None = None):
     headers = {
@@ -51,7 +83,7 @@ def raffle_detail(request):
     start = (current_page - 1) * PAGE_SIZE + 1
     end = min(start + PAGE_SIZE - 1, total)
 
-    taken = list(Ticket.objects.filter(raffle=raffle).values_list("number", flat=True))
+    taken = list(_get_taken_numbers_for_raffle(raffle))
     first_page_numbers = range(start, end + 1)
 
     return render(request, "raffle/detail.html", {
@@ -84,7 +116,7 @@ def grid_page(request):
     start = (page - 1) * PAGE_SIZE + 1
     end = min(start + PAGE_SIZE - 1, total)
 
-    taken = set(Ticket.objects.filter(raffle=raffle).values_list("number", flat=True))
+    taken = _get_taken_numbers_for_raffle(raffle)
     numbers = range(start, end + 1)
 
     html = render_to_string("raffle/_grid.html", {
@@ -272,6 +304,98 @@ def create_preference(request):
     )
 
     return JsonResponse({"preference_id": preference_id})
+
+# ========= Reservar Transferencia 12 horas =========
+
+@csrf_exempt
+@require_POST
+def transfer_reserve(request):
+    """
+    Reserva números para pago por transferencia por 12 horas.
+    No crea tickets; solo un Payment 'pending' con gateway='transfer'.
+    Cuando confirmes manualmente la transferencia, podrás marcarlo como 'paid'
+    y usar _confirm_tickets_from_payment_id para generar los Tickets.
+    """
+    raffle = _get_active_raffle()
+    if not raffle:
+        return JsonResponse({"error": "No hay rifa activa"}, status=400)
+
+    try:
+        data = json.loads(request.body.decode())
+    except Exception:
+        return JsonResponse({"error": "JSON inválido"}, status=400)
+
+    chosen_numbers = data.get("chosen_numbers") or []
+    buyer = data.get("buyer") or {}
+
+    # Validaciones básicas
+    if not chosen_numbers:
+        return JsonResponse({"error": "Debes seleccionar al menos un número"}, status=400)
+
+    # Normalizar a int
+    try:
+        chosen_numbers = [int(n) for n in chosen_numbers]
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "Números inválidos"}, status=400)
+
+    # Filtrar por rango válido
+    for n in chosen_numbers:
+        if n < 1 or n > raffle.numbers_total:
+            return JsonResponse({"error": f"Número fuera de rango: {n}"}, status=400)
+
+    name = (buyer.get("name") or "").strip()
+    email = (buyer.get("email") or "").strip()
+    phone = (buyer.get("phone") or "").strip()
+
+    if not name or not email or "@" not in email:
+        return JsonResponse(
+            {"error": "Debes ingresar nombre y un correo válido"},
+            status=400,
+        )
+
+    now = timezone.now()
+    expires_at = now + timedelta(hours=12)
+
+    with transaction.atomic():
+        # Recalcular taken dentro de la transacción para evitar carreras
+        taken = _get_taken_numbers_for_raffle(raffle)
+        conflict = taken.intersection(chosen_numbers)
+        if conflict:
+            return JsonResponse(
+                {
+                    "error": "Algunos números ya no están disponibles",
+                    "conflict_numbers": sorted(conflict),
+                },
+                status=409,
+            )
+
+        total = int(raffle.price_clp) * len(chosen_numbers)
+        gateway_payment_id = f"transfer-{raffle.id}-{uuid4()}"
+
+        Payment.objects.create(
+            raffle=raffle,
+            amount_clp=total,
+            gateway="transfer",
+            gateway_payment_id=gateway_payment_id,
+            status="pending",
+            buyer_name=name,
+            buyer_email=email,
+            buyer_phone=phone,
+            chosen_number=0,  # seguimos usando chosen_numbers en metadata
+            expires_at=expires_at,
+            metadata={
+                "chosen_numbers": chosen_numbers,
+                "payment_method": "transfer",
+            },
+        )
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "reserved_until": expires_at.isoformat(),
+            "count": len(chosen_numbers),
+        }
+    )
 
 # ========= Webhook Mercado Pago =========
 
