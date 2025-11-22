@@ -77,14 +77,15 @@
     if (selected.has(n)) {
       selected.delete(n);
       btn.classList.remove("bg-blue-600", "text-white", "border-blue-600");
-      btn.classList.add("bg-white");
+      btn.classList.add("bg-white", "text-gray-800");
     } else {
       selected.add(n);
-      btn.classList.remove("bg-white");
+      btn.classList.remove("bg-white", "text-gray-800");
       btn.classList.add("bg-blue-600", "text-white", "border-blue-600");
     }
     refreshSummary();
   }
+
 
   // Click en la grilla (delegado)
   grid?.addEventListener("click", (ev) => {
