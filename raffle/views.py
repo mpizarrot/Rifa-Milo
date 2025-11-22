@@ -245,7 +245,7 @@ def create_preference(request):
             return JsonResponse({"error": "MP_PUBLIC_BASE_URL no configurado en el servidor"}, status=500)
         base_url = request.build_absolute_uri("/").rstrip("/")
 
-    success_url = f"{base_url}/?ok=1"
+    success_url = f"{base_url}{reverse('payment_success')}?kind=raffle"
     failure_url = f"{base_url}/?fail=1"
     pending_url = f"{base_url}/?pending=1"
     notification_url = f"{base_url}{reverse('mp_webhook')}"
@@ -702,7 +702,7 @@ def create_donation_preference(request):
         request.build_absolute_uri("/").rstrip("/")
     )
 
-    success_url = f"{base_url}/donar/?ok=1"
+    success_url = f"{base_url}{reverse('payment_success')}?kind=donation"
     failure_url = f"{base_url}/donar/?fail=1"
     pending_url = f"{base_url}/donar/?pending=1"
     notification_url = f"{base_url}{reverse('mp_webhook')}"
@@ -868,3 +868,17 @@ def prizes_page(request):
         "raffle": raffle,
         "prizes": prizes,
     })
+
+@require_GET
+def payment_success(request):
+    """
+    Página limpia que se muestra cuando Mercado Pago redirige con pago aprobado.
+    Sirve tanto para rifa como para donación.
+    """
+    kind = request.GET.get("kind", "raffle")  # 'raffle' o 'donation'
+    is_donation = (kind == "donation")
+
+    context = {
+        "is_donation": is_donation,
+    }
+    return render(request, "raffle/payment_success.html", context)

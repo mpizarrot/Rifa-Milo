@@ -21,5 +21,6 @@ urlpatterns = [
         name="mp_create_donation_preference",
     ),
     path("premios/", views.prizes_page, name="prizes_page"),
+    path("pago-exitoso/", views.payment_success, name="payment_success"),
 ]
 

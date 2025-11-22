@@ -30,16 +30,6 @@
   <p class="mt-2">Precio por número: <span class="font-semibold">${{ raffle.price_clp }}</span> CLP</p>
 </div>
 
-{% if request.GET.ok %}
-<div class="mt-4 p-3 rounded-md bg-green-50 border border-green-300">
-    <p class="text-green-800 font-semibold">
-    ¡Pago confirmado! ¡Muchas gracias! 🐶💚  
-    Tu participación ayudará directamente a que Milo pueda operarse y dejar de cojear.  
-    Gracias por darle una oportunidad real de vivir sin dolor.
-    </p>
-</div>
-{% endif %}
-
 {% if request.GET.fail %}
 <div class="mt-4 p-3 rounded-md bg-red-50 border border-red-300">
     <p class="text-red-800 font-semibold">
