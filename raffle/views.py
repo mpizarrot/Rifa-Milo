@@ -672,13 +672,6 @@ def create_donation_preference(request):
         data = json.loads(request.body.decode())
     except Exception:
         return JsonResponse({"error": "JSON inválido"}, status=400)
-    
-    # Mínimo y máximo razonables para evitar abuso
-    if amount_clp < 1000 or amount_clp > 5000000:
-        return JsonResponse(
-            {"error": "Debes ingresar un monto entre $1.000 y $5.000.000 CLP"},
-            status=400,
-        )
 
     amount_clp = int(data.get("amount_clp") or 0)
     buyer = data.get("buyer") or {}
@@ -775,42 +768,27 @@ def create_donation_preference(request):
         )
 
     preference_id = body["id"]
-    client_ip = request.META.get("REMOTE_ADDR")
-    user_agent = request.META.get("HTTP_USER_AGENT", "")
 
-    try:
-        Payment.objects.update_or_create(
-            gateway_payment_id=external_reference,
-            defaults=dict(
-                raffle=raffle,
-                amount_clp=amount_clp,
-                status="pending",
-                buyer_name=buyer_name,
-                buyer_email=buyer_email,
-                buyer_phone=phone,
-                chosen_number=0,
-                metadata={
-                    "is_donation": True,
-                    "amount_clp": amount_clp,
-                    "is_anonymous": is_anonymous,
-                    "buyer_raw": buyer,
-                    "client_ip": client_ip,
-                    "user_agent": user_agent,
-                },
-                gateway="mercadopago",
-            ),
-        )
-    except Exception as e:
-        # Algo explotó al guardar el Payment
-        if settings.DEBUG:
-            import traceback
-            traceback.print_exc()
-            return JsonResponse(
-                {"error": "Error guardando Payment de donación", "detail": str(e)},
-                status=500,
-            )
-        # En producción probablemente quieras loguear y relanzar
-        raise
+    Payment.objects.update_or_create(
+        gateway_payment_id=external_reference,
+        defaults=dict(
+            raffle=raffle,
+            amount_clp=amount_clp,
+            status="pending",
+            buyer_name=buyer_name,
+            buyer_email=buyer_email,
+            buyer_phone=phone,
+            chosen_number=0,
+            metadata={
+                "is_donation": True,
+                "mp_preference_id": preference_id,
+                "amount_clp": amount_clp,
+                "buyer_raw": buyer,
+                "is_anonymous": is_anonymous,
+            },
+            gateway="mercadopago",
+        ),
+    )
 
     return JsonResponse({"preference_id": preference_id})
 
