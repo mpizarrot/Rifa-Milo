@@ -1,13 +1,22 @@
 <div class="gap-2 grid" style="grid-template-columns: repeat(10, minmax(0,1fr));">
   {% for n in numbers %}
-    <button
-      class="px-2 py-1 text-xs bg-white border rounded hover:bg-blue-50
-            text-gray-800 number-btn
-            focus:outline-none focus:ring-0"
-      data-number="{{ n }}"
-    >
-      {{ n }}
-    </button>
+    {% if n in taken %}
+      <button
+        class="px-2 py-1 text-xs bg-white border rounded hover:bg-blue-50
+              text-gray-800 number-btn
+              focus:outline-none focus:ring-0"
+        data-number="{{ n }}"
+      >
+        {{ n }}
+      </button>
+    {% else %}
+      <button
+        class="px-2 py-1 text-xs bg-white border rounded text-gray-800 number-btn"
+        data-number="{{ n }}"
+      >
+        {{ n }}
+      </button>
+    {% endif %}
   {% endfor %}
 </div>
 

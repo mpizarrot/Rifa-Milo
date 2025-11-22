@@ -7,6 +7,12 @@
 {% else %}
 
 {% load static %}
+<style>
+  .number-btn:hover:not(.is-selected) {
+    background-color: rgb(239, 246, 255);
+  }
+</style>
+
 <!-- Config para JS externos -->
 <div id="mp-config"
      data-public-key="{{ MP_PUBLIC_KEY }}"

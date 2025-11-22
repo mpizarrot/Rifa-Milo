@@ -75,14 +75,27 @@
     if (!n) return;
 
     if (selected.has(n)) {
+      // Quitar de la selección
       selected.delete(n);
-      btn.classList.remove("bg-blue-600", "text-white", "border-blue-600");
+      btn.classList.remove(
+        "bg-blue-600",
+        "text-white",
+        "border-blue-600",
+        "is-selected",
+      );
       btn.classList.add("bg-white", "text-gray-800");
     } else {
+      // Agregar a la selección
       selected.add(n);
       btn.classList.remove("bg-white", "text-gray-800");
-      btn.classList.add("bg-blue-600", "text-white", "border-blue-600");
+      btn.classList.add(
+        "bg-blue-600",
+        "text-white",
+        "border-blue-600",
+        "is-selected",
+      );
     }
+
     refreshSummary();
   }
 
@@ -108,8 +121,13 @@
       buttons.forEach((btn) => {
         const n = Number(btn.dataset.number);
         if (selected.has(n)) {
-          btn.classList.remove("bg-white");
-          btn.classList.add("bg-blue-600", "text-white", "border-blue-600");
+          btn.classList.remove("bg-white", "text-gray-800");
+          btn.classList.add(
+            "bg-blue-600",
+            "text-white",
+            "border-blue-600",
+            "is-selected",
+          );
         }
       });
     }
@@ -159,9 +177,23 @@
 
     const data = await resp.json().catch(() => ({}));
 
-    if (!resp.ok || !data.ok) {
-      const msg = data.error || "No se pudo crear la reserva.";
-      transferMsg.textContent = msg;
+    if (data.redirect_url) {
+      // Actualizar UI para que se vean reservados
+      window.selected.clear();
+      refreshSummary();
+      document.body.dispatchEvent(new Event("refreshGrid"));
+
+      const until = data.reserved_until || "";
+      transferMsg.textContent =
+        `Tus números han sido reservados para transferencia. ` +
+        `Tienes 12 horas para realizarla. ` +
+        (until ? `Reserva válida hasta: ${until}` : "");
+
+      // Redirigir después de un pequeño delay
+      setTimeout(() => {
+        window.location.href = data.redirect_url;
+      }, 1500);
+
       return;
     }
 
