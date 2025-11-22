@@ -20,5 +20,6 @@ urlpatterns = [
         views.create_donation_preference,
         name="mp_create_donation_preference",
     ),
+    path("premios/", views.prizes_page, name="prizes_page"),
 ]
 

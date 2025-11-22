@@ -725,3 +725,80 @@ def create_donation_preference(request):
     )
 
     return JsonResponse({"preference_id": preference_id})
+
+# ============== premios ======================== #
+
+@require_GET
+def prizes_page(request):
+    """
+    Página con el listado completo de premios de la rifa.
+    """
+    raffle = _get_active_raffle()
+
+    prizes = [
+        {
+            "name": "Pase diario a Lollapalooza Chile 2026 (viernes 13 de marzo)",
+            "image": "img/prizes/lollapalooza.jpg",
+            "description": "Un pase diario para vivir Lollapalooza Chile 2026 el día viernes 13 de marzo."
+        },
+        {
+            "name": "$50.000 CLP",
+            "image": "img/prizes/50000clp.png",
+            "description": "Premio en dinero por un valor de $50.000 CLP."
+        },
+        {
+            "name": "Plancha de pelo",
+            "image": "img/prizes/plancha_pelo.jpg",
+            "description": "Plancha de pelo para lucir un look increíble."
+        },
+        {
+            "name": "Sesión de limpieza facial",
+            "image": "img/prizes/limpieza_facial.jpg",
+            "description": "Una sesión de limpieza facial para cuidar tu piel."
+        },
+        {
+            "name": "Tabla de picar (grande)",
+            "image": "img/prizes/tabla_picar_grande.png",
+            "description": "Hermosa tabla de picar artesanal hecha con madera nativa."
+        },
+        {
+            "name": "Tabla de picar (pequeña)",
+            "image": "img/prizes/tabla_picar_pequena.png",
+            "description": "Versión pequeña de la tabla de picar artesanal, perfecta para el uso diario."
+        },
+        {
+            "name": "Tabla de picoteo",
+            "image": "img/prizes/tabla_picoteo.png",
+            "description": "Tabla de picoteo artesanal ideal para compartir."
+        },
+        {
+            "name": "Torta 3 leches para 20 personas",
+            "image": "img/prizes/torta.png",
+            "description": "Deliciosa torta casera para celebrar con hasta 20 personas."
+        },
+        {
+            "name": "Vino Carmenere Gran Reserva",
+            "image": "img/prizes/vino_carmenere.png",
+            "description": "Botella de vino Carmenere Gran Reserva."
+        },
+        {
+            "name": "Vino Cabernet Sauvignon",
+            "image": "img/prizes/vino_cabernet.png",
+            "description": "Botella de vino Cabernet Sauvignon para compartir."
+        },
+        {
+            "name": "Vaporizador facial",
+            "image": "img/prizes/vaporizador_facial.jpg",
+            "description": "Vaporizador facial ideal para rutinas de skincare."
+        },
+        {
+            "name": "Pan de Pascua",
+            "image": "img/prizes/pan_pascua.jpg",
+            "description": "Pan de pascua casero con frutos secos."
+        }
+    ]
+
+    return render(request, "raffle/prizes.html", {
+        "raffle": raffle,
+        "prizes": prizes,
+    })
