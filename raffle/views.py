@@ -539,11 +539,12 @@ def mp_webhook(request):
 
     # 6) Obtener secret desde settings
     secret = getattr(settings, "MP_WEBHOOK_SECRET", "")
+    print("   SECRET LEN:", len(secret))
+
     if not secret:
-        print("   >> MP_WEBHOOK_SECRET no configurado")
-        if not settings.DEBUG:
-            return HttpResponse("server misconfigured", status=500)
-        return HttpResponse("secret not configured (dev)", status=200)
+        print("   >> MP_WEBHOOK_SECRET no configurado, NO se valida firma (solo dev)")
+        # En dev puedes dejar pasar todo, en prod deberías dejar esto en False
+        return HttpResponse("secret not configured", status=200)
 
     # 7) Crear HMAC SHA256(manifest, secret)
     hmac_obj = hmac.new(secret.encode(), msg=manifest.encode(), digestmod=hashlib.sha256)
@@ -591,9 +592,9 @@ def mp_webhook(request):
         if pstatus == "approved" and pdetail == "accredited" and external_ref:
             print("   >> Pago aprobado, confirmando tickets para external_ref:", external_ref)
             _confirm_tickets_from_payment_id(external_ref)
-        elif pstatus in ("rejected", "cancelled") and external_ref:
-            print("   >> Pago rechazado/cancelado, marcando Payment como failed:", external_ref)
-            Payment.objects.filter(gateway_payment_id=external_ref).update(status="failed")
+        elif pstatus in ("rejected", "cancelled") and preference_id:
+            print("   >> Pago rechazado/cancelado, marcando Payment como failed:", preference_id)
+            Payment.objects.filter(gateway_payment_id=preference_id).update(status="failed")
 
         return HttpResponse("ok", status=200)
 
@@ -644,6 +645,7 @@ def export_payments_csv(request, raffle_id: int):
 # ============== donaciones ======================== #
 
 @ensure_csrf_cookie
+@require_GET
 def donation_page(request):
     """
     Página simple para recibir donaciones (sin elegir números).
@@ -773,35 +775,42 @@ def create_donation_preference(request):
         )
 
     preference_id = body["id"]
-
-    from .models import Payment
     client_ip = request.META.get("REMOTE_ADDR")
     user_agent = request.META.get("HTTP_USER_AGENT", "")
 
-    Payment.objects.update_or_create(
-        gateway_payment_id=external_reference,
-        defaults=dict(
-            raffle=raffle,
-            amount_clp=amount_clp,
-            status="pending",
-            buyer_name=buyer_name,
-            buyer_email=buyer_email,
-            buyer_phone=phone,
-            chosen_number=0,
-            metadata={
-                "is_donation": True,
-                "amount_clp": amount_clp,
-                "is_anonymous": is_anonymous,
-                "buyer_raw": {
-                    "name": name_raw,
-                    "email": email_raw,
+    try:
+        Payment.objects.update_or_create(
+            gateway_payment_id=external_reference,
+            defaults=dict(
+                raffle=raffle,
+                amount_clp=amount_clp,
+                status="pending",
+                buyer_name=buyer_name,
+                buyer_email=buyer_email,
+                buyer_phone=phone,
+                chosen_number=0,
+                metadata={
+                    "is_donation": True,
+                    "amount_clp": amount_clp,
+                    "is_anonymous": is_anonymous,
+                    "buyer_raw": buyer,
+                    "client_ip": client_ip,
+                    "user_agent": user_agent,
                 },
-                "client_ip": client_ip,
-                "user_agent": user_agent,
-            },
-            gateway="mercadopago",
-        ),
-    )
+                gateway="mercadopago",
+            ),
+        )
+    except Exception as e:
+        # Algo explotó al guardar el Payment
+        if settings.DEBUG:
+            import traceback
+            traceback.print_exc()
+            return JsonResponse(
+                {"error": "Error guardando Payment de donación", "detail": str(e)},
+                status=500,
+            )
+        # En producción probablemente quieras loguear y relanzar
+        raise
 
     return JsonResponse({"preference_id": preference_id})
 
