@@ -787,7 +787,7 @@ def create_donation_preference(request):
             buyer_name=buyer_name,
             buyer_email=buyer_email,
             buyer_phone=phone,
-            chosen_number=None,
+            chosen_number=0,
             metadata={
                 "is_donation": True,
                 "amount_clp": amount_clp,
