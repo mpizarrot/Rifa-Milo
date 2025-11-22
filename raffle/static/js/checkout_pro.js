@@ -11,7 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const mpConfig = document.querySelector("#mp-config");
   if (!mpConfig) {
-    console.error("[checkout_pro] No se encontró #mp-config");
+    console.log("[checkout_pro] No se encontró #mp-config, no es página de pago");
     return;
   }
 

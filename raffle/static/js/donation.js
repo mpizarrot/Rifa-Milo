@@ -120,12 +120,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let data;
     try {
+      const contentType = resp.headers.get("content-type") || "";
+
+      if (!contentType.includes("application/json")) {
+        const text = await resp.text();
+        console.error(
+          "[donation] Respuesta NO-JSON de create_donation_preference:",
+          resp.status,
+          text
+        );
+        creatingPreference = false;
+        return;
+      }
+
       data = await resp.json();
     } catch (err) {
       console.error("[donation] Error parseando respuesta de preferencia:", err);
       creatingPreference = false;
       return;
     }
+
 
     console.log("[donation] respuesta de create_donation_preference:", data);
 

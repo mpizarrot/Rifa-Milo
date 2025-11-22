@@ -22,16 +22,25 @@
   const buyerEmail = document.getElementById("buyer_email");
   const buyerPhone = document.getElementById("buyer_phone");
 
-  const walletContainer = document.getElementById("walletBrick_container");
   const transferSection = document.getElementById("transfer-section");
   const transferBtn = document.getElementById("transfer-btn");
   const transferMsg = document.getElementById("transfer-message");
+
+  // Si no estamos en la página de la rifa (no hay grilla ni resumen), salimos
+  if (!grid || !selCount || !selList || !selTotal) {
+    console.warn("[detail_page] No se encontraron elementos de selección; no se inicializa script.");
+    return;
+  }
 
   // Set global para que lo use checkout_pro.js
   const selected = new Set();
   window.selected = selected;
 
   function refreshSummary() {
+    if (!selCount || !selList || !selTotal) {
+      return;
+    }
+    
     const arr = Array.from(selected).sort((a, b) => a - b);
     selCount.textContent = arr.length;
     selList.textContent = arr.length ? arr.join(", ") : "—";
