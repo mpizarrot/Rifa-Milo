@@ -772,9 +772,9 @@ def prizes_page(request):
             "description": "Tabla de picoteo artesanal ideal para compartir."
         },
         {
-            "name": "Torta 3 leches para 20 personas",
-            "image": "img/prizes/torta.png",
-            "description": "Deliciosa torta casera para celebrar con hasta 20 personas."
+            "name": "Vaporizador facial",
+            "image": "img/prizes/vaporizador_facial.jpg",
+            "description": "Vaporizador facial ideal para rutinas de skincare."
         },
         {
             "name": "Vino Carmenere Gran Reserva",
@@ -787,9 +787,9 @@ def prizes_page(request):
             "description": "Botella de vino Cabernet Sauvignon para compartir."
         },
         {
-            "name": "Vaporizador facial",
-            "image": "img/prizes/vaporizador_facial.jpg",
-            "description": "Vaporizador facial ideal para rutinas de skincare."
+            "name": "Torta 3 leches para 20 personas",
+            "image": "img/prizes/torta.png",
+            "description": "Deliciosa torta casera para celebrar con hasta 20 personas."
         },
         {
             "name": "Pan de Pascua",
