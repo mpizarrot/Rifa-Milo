@@ -133,7 +133,7 @@
     }
   });
 
-    async function reserveByTransfer() {
+  async function reserveByTransfer() {
     if (!window.selected || !(window.selected instanceof Set)) {
       alert("Error interno: selección no disponible.");
       return;
@@ -152,10 +152,6 @@
       alert("Debes ingresar tu nombre y un correo válido.");
       return;
     }
-    if (numbers.length === 0) {
-      transferMsg.textContent = "No has seleccionado números.";
-      return;
-    }
     if (numbers.length > 50) {
       transferMsg.textContent = "No puedes reservar más de 50 números por transferencia.";
       return;
@@ -163,45 +159,43 @@
 
     transferMsg.textContent = "Creando reserva para transferencia...";
 
-    const resp = await fetch("/transfer/reserve/", {
-      method: "POST",
-      headers: {
+    let resp;
+    let data = null;
+
+    try {
+      resp = await fetch("/transfer/reserve/", {
+        method: "POST",
+        headers: {
           "Content-Type": "application/json",
           "X-CSRFToken": csrftoken || "",
         },
         body: JSON.stringify({
           chosen_numbers: numbers,
           buyer: { name, email, phone },
-      }),
-    });
-
-    const data = await resp.json().catch(() => ({}));
-
-    if (data.redirect_url) {
-      // Actualizar UI para que se vean reservados
-      window.selected.clear();
-      refreshSummary();
-      document.body.dispatchEvent(new Event("refreshGrid"));
-
-      const until = data.reserved_until || "";
-      transferMsg.textContent =
-        `Tus números han sido reservados para transferencia. ` +
-        `Tienes 12 horas para realizarla. ` +
-        (until ? `Reserva válida hasta: ${until}` : "");
-
-      // Redirigir después de un pequeño delay
-      setTimeout(() => {
-        window.location.href = data.redirect_url;
-      }, 1500);
-
+        }),
+      });
+    } catch (e) {
+      console.error("Error de red en reserva por transferencia:", e);
+      transferMsg.textContent = "No se pudo contactar al servidor. Intenta nuevamente.";
       return;
     }
 
-    if (data.redirect_url) {
-      window.location.href = data.redirect_url;
+    try {
+      data = await resp.json();
+    } catch (e) {
+      data = null;
+    }
+
+    // Si el backend devolvió error (400, 409, 500, etc.)
+    if (!resp.ok || !data || data.ok === false) {
+      const msg =
+        (data && data.error) ||
+        "No se pudo crear la reserva. Verifica tus datos o intenta nuevamente.";
+      transferMsg.textContent = msg;
       return;
     }
 
+    // Éxito: el backend creó el Payment gateway="transfer"
     window.selected.clear();
     refreshSummary();
     document.body.dispatchEvent(new Event("refreshGrid"));
@@ -212,6 +206,12 @@
       `Tienes 12 horas para realizarla. ` +
       (until ? `Reserva válida hasta: ${until}` : "");
 
+    if (data.redirect_url) {
+      // Redirigir después de un pequeño delay, solo para que el usuario vea el mensaje
+      setTimeout(() => {
+        window.location.href = data.redirect_url;
+      }, 1500);
+    }
   }
 
   transferBtn?.addEventListener("click", reserveByTransfer);
