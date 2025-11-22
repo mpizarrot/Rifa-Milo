@@ -2,9 +2,8 @@
   {% for n in numbers %}
     {% if n in taken %}
       <button
-        class="px-2 py-1 text-xs bg-white border rounded hover:bg-blue-50
-              text-gray-800 number-btn
-              focus:outline-none focus:ring-0"
+        disabled
+        class="px-2 py-1 text-xs bg-gray-300 text-gray-500 border border-gray-400 rounded cursor-not-allowed opacity-70"
         data-number="{{ n }}"
       >
         {{ n }}
