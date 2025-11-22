@@ -1,6 +1,14 @@
 document.addEventListener("DOMContentLoaded", () => {
   console.log("[checkout_pro] DOMContentLoaded");
 
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(";").shift();
+    return null;
+  }
+  const csrftoken = getCookie("csrftoken");
+
   const mpConfig = document.querySelector("#mp-config");
   if (!mpConfig) {
     console.error("[checkout_pro] No se encontró #mp-config");
@@ -118,7 +126,10 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       resp = await fetch("/mp/create_preference/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrftoken || "",
+        },
         body: JSON.stringify({
           chosen_numbers: selectedNumbers,
           buyer: { name, email, phone },

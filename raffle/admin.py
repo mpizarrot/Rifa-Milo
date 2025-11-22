@@ -1,4 +1,4 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 
 from .models import Raffle, Payment, Ticket
 from .views import _confirm_tickets_from_payment_id
@@ -14,16 +14,12 @@ def mark_as_paid_and_create_tickets(modeladmin, request, queryset):
     """
     count = 0
     for p in queryset:
-        if p.gateway != "transfer" or p.status != "pending":
-            continue
         ok = _confirm_tickets_from_payment_id(p.gateway_payment_id)
         if ok:
             count += 1
-
-    modeladmin.message_user(
-        request,
-        f"Se marcaron {count} pagos como pagados y se generaron sus tickets (si correspondía).",
-    )
+        else:
+            messages.warning(request, f"No se pudieron confirmar tickets para {p.gateway_payment_id}")
+    messages.success(request, f"Se marcaron {count} pagos como pagados y se crearon los tickets.")
 
 
 @admin.register(Payment)

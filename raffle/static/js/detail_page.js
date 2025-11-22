@@ -1,6 +1,14 @@
 (function () {
   "use strict";
 
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(";").shift();
+    return null;
+  }
+  const csrftoken = getCookie("csrftoken");
+
   const priceEl = document.getElementById("mp-config");
   const PRICE = Number(priceEl?.dataset.price || "0");
 
@@ -116,15 +124,26 @@
       alert("Debes ingresar tu nombre y un correo válido.");
       return;
     }
+    if (numbers.length === 0) {
+      transferMsg.textContent = "No has seleccionado números.";
+      return;
+    }
+    if (numbers.length > 50) {
+      transferMsg.textContent = "No puedes reservar más de 50 números por transferencia.";
+      return;
+    }
 
     transferMsg.textContent = "Creando reserva para transferencia...";
 
     const resp = await fetch("/transfer/reserve/", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chosen_numbers: numbers,
-        buyer: { name, email, phone },
+      headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrftoken || "",
+        },
+        body: JSON.stringify({
+          chosen_numbers: numbers,
+          buyer: { name, email, phone },
       }),
     });
 

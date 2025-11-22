@@ -1,6 +1,14 @@
 document.addEventListener("DOMContentLoaded", () => {
   console.log("[donation] DOMContentLoaded");
 
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(";").shift();
+    return null;
+  }
+  const csrftoken = getCookie("csrftoken");
+
   const mpConfig = document.querySelector("#mp-config");
   if (!mpConfig) {
     console.error("[donation] No se encontró #mp-config");
@@ -40,7 +48,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     amountDisplay.textContent = formatAmountCLP(amount);
 
-    const hasValidAmount = amount >= 1000; // mínimo sugerido
+    const hasValidAmount = amount >= 1000 && amount <= 5000000;
     const readyForPayment = hasValidAmount;
 
     if (!readyForPayment) {
@@ -95,7 +103,10 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       resp = await fetch("/mp/create_donation_preference/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrftoken || "",
+        },
         body: JSON.stringify({
           amount_clp: amount,
           buyer: { name, email },

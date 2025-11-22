@@ -7,7 +7,8 @@ from django.conf import settings
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_GET, require_POST
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
+from django_ratelimit.decorators import ratelimit
 from django.db import transaction, IntegrityError
 from django.utils import timezone
 from django.urls import reverse
@@ -68,6 +69,7 @@ def _mp_headers(idempotency_key: str | None = None):
 
 PAGE_SIZE = 100  # 10 x 10
 
+@ensure_csrf_cookie
 @require_GET
 def raffle_detail(request):
     raffle = _get_active_raffle()
@@ -195,8 +197,8 @@ def _confirm_tickets_from_payment_id(gateway_payment_id: str):
 
 # ========= Crear pedido Mercado Pago =========
 
-@csrf_exempt
 @require_POST
+@ratelimit(key="ip", rate="10/m", block=True)
 def create_preference(request):
     raffle = _get_active_raffle()
     if not raffle:
@@ -213,11 +215,35 @@ def create_preference(request):
     if not chosen_numbers:
         return JsonResponse({"error": "Debes seleccionar números"}, status=400)
 
+    # límite razonable por request para evitar payloads enormes
+    if len(chosen_numbers) > 100:
+        return JsonResponse({"error": "Demasiados números en una sola compra"}, status=400)
+    
+    try:
+        chosen_numbers = [int(n) for n in chosen_numbers]
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "Números inválidos"}, status=400)
+    
+    for n in chosen_numbers:
+        if n < 1 or n > raffle.numbers_total:
+            return JsonResponse({"error": f"Número fuera de rango: {n}"}, status=400)
+    
+    name = (buyer.get("name") or "").strip()
+    email = (buyer.get("email") or "").strip()
+    phone = (buyer.get("phone") or "").strip()
+
+    if not name or not email or "@" not in email:
+        return JsonResponse({"error": "Nombre y correo válidos son obligatorios"}, status=400)
+    
     quantity = len(chosen_numbers)
     total = int(raffle.price_clp) * quantity
     external_reference = f"raffle-{raffle.id}-{int(timezone.now().timestamp())}"
 
-    base_url = getattr(settings, "MP_PUBLIC_BASE_URL", request.build_absolute_uri("/").rstrip("/"))
+    base_url = getattr(settings, "MP_PUBLIC_BASE_URL", "").rstrip("/")
+    if not base_url:
+        if not settings.DEBUG:
+            return JsonResponse({"error": "MP_PUBLIC_BASE_URL no configurado en el servidor"}, status=500)
+        base_url = request.build_absolute_uri("/").rstrip("/")
 
     success_url = f"{base_url}/?ok=1"
     failure_url = f"{base_url}/?fail=1"
@@ -285,30 +311,36 @@ def create_preference(request):
     external_reference = pref_body["external_reference"]
 
     # Guarda Payment "pendiente" asociado al external_reference
+    client_ip = request.META.get("REMOTE_ADDR")
+    user_agent = request.META.get("HTTP_USER_AGENT", "")
+
     Payment.objects.update_or_create(
         gateway_payment_id=external_reference,
         defaults=dict(
             raffle=raffle,
             amount_clp=total,
             status="pending",
-            buyer_name=buyer.get("name", "S/N"),
-            buyer_email=buyer.get("email", ""),
-            buyer_phone=buyer.get("phone", ""),
-            chosen_number=0,  # seguimos usando chosen_numbers en metadata
+            buyer_name=name,
+            buyer_email=email,
+            buyer_phone=phone,
+            chosen_number=0,
             metadata={
                 "chosen_numbers": chosen_numbers,
-                "mp_preference_id": preference_id,  # opcional, por si quieres tenerlo guardado
+                "mp_preference_id": preference_id,
+                "client_ip": client_ip,
+                "user_agent": user_agent,
             },
             gateway="mercadopago",
         ),
     )
 
+
     return JsonResponse({"preference_id": preference_id})
 
 # ========= Reservar Transferencia 12 horas =========
 
-@csrf_exempt
 @require_POST
+@ratelimit(key="ip", rate="10/m", block=True)
 def transfer_reserve(request):
     """
     Reserva números para pago por transferencia por 12 horas.
@@ -352,6 +384,27 @@ def transfer_reserve(request):
             {"error": "Debes ingresar nombre y un correo válido"},
             status=400,
         )
+    
+    # límite máximo de números por reserva
+    if len(chosen_numbers) > 50:
+        return JsonResponse({"error": "No puedes reservar más de 50 números por transferencia"}, status=400)
+
+    # opcional: limitar reservas por email en ventana de tiempo
+    recent_pending = Payment.objects.filter(
+        raffle=raffle,
+        gateway="transfer",
+        status="pending",
+        buyer_email=email,
+        created_at__gte=timezone.now() - timedelta(hours=24),
+    ).count()
+    if recent_pending >= 5:
+        return JsonResponse(
+            {"error": "Has realizado demasiadas reservas por transferencia en las últimas 24 horas."},
+            status=429,
+        )
+
+    client_ip = request.META.get("REMOTE_ADDR")
+    user_agent = request.META.get("HTTP_USER_AGENT", "")
 
     now = timezone.now()
     expires_at = now + timedelta(hours=12)
@@ -381,11 +434,12 @@ def transfer_reserve(request):
             buyer_name=name,
             buyer_email=email,
             buyer_phone=phone,
-            chosen_number=0,  # seguimos usando chosen_numbers en metadata
             expires_at=expires_at,
             metadata={
                 "chosen_numbers": chosen_numbers,
                 "payment_method": "transfer",
+                "client_ip": client_ip,
+                "user_agent": user_agent,
             },
         )
 
@@ -485,12 +539,11 @@ def mp_webhook(request):
 
     # 6) Obtener secret desde settings
     secret = getattr(settings, "MP_WEBHOOK_SECRET", "")
-    print("   SECRET LEN:", len(secret))
-
     if not secret:
-        print("   >> MP_WEBHOOK_SECRET no configurado, NO se valida firma (solo dev)")
-        # En dev puedes dejar pasar todo, en prod deberías dejar esto en False
-        return HttpResponse("secret not configured", status=200)
+        print("   >> MP_WEBHOOK_SECRET no configurado")
+        if not settings.DEBUG:
+            return HttpResponse("server misconfigured", status=500)
+        return HttpResponse("secret not configured (dev)", status=200)
 
     # 7) Crear HMAC SHA256(manifest, secret)
     hmac_obj = hmac.new(secret.encode(), msg=manifest.encode(), digestmod=hashlib.sha256)
@@ -538,9 +591,9 @@ def mp_webhook(request):
         if pstatus == "approved" and pdetail == "accredited" and external_ref:
             print("   >> Pago aprobado, confirmando tickets para external_ref:", external_ref)
             _confirm_tickets_from_payment_id(external_ref)
-        elif pstatus in ("rejected", "cancelled") and preference_id:
-            print("   >> Pago rechazado/cancelado, marcando Payment como failed:", preference_id)
-            Payment.objects.filter(gateway_payment_id=preference_id).update(status="failed")
+        elif pstatus in ("rejected", "cancelled") and external_ref:
+            print("   >> Pago rechazado/cancelado, marcando Payment como failed:", external_ref)
+            Payment.objects.filter(gateway_payment_id=external_ref).update(status="failed")
 
         return HttpResponse("ok", status=200)
 
@@ -590,6 +643,7 @@ def export_payments_csv(request, raffle_id: int):
 
 # ============== donaciones ======================== #
 
+@ensure_csrf_cookie
 @require_GET
 def donation_page(request):
     """
@@ -602,8 +656,8 @@ def donation_page(request):
     })
 
 
-@csrf_exempt
 @require_POST
+@ratelimit(key="ip", rate="10/m", block=True)
 def create_donation_preference(request):
     """
     Crea una preferencia de MercadoPago para una DONACIÓN (monto libre).
@@ -617,6 +671,13 @@ def create_donation_preference(request):
         data = json.loads(request.body.decode())
     except Exception:
         return JsonResponse({"error": "JSON inválido"}, status=400)
+    
+    # Mínimo y máximo razonables para evitar abuso
+    if amount_clp < 1000 or amount_clp > 5000000:
+        return JsonResponse(
+            {"error": "Debes ingresar un monto entre $1.000 y $5.000.000 CLP"},
+            status=400,
+        )
 
     amount_clp = int(data.get("amount_clp") or 0)
     buyer = data.get("buyer") or {}
@@ -715,6 +776,8 @@ def create_donation_preference(request):
     preference_id = body["id"]
 
     from .models import Payment
+    client_ip = request.META.get("REMOTE_ADDR")
+    user_agent = request.META.get("HTTP_USER_AGENT", "")
 
     Payment.objects.update_or_create(
         gateway_payment_id=external_reference,
@@ -725,13 +788,17 @@ def create_donation_preference(request):
             buyer_name=buyer_name,
             buyer_email=buyer_email,
             buyer_phone=phone,
-            chosen_number=0,
+            chosen_number=None,
             metadata={
                 "is_donation": True,
-                "mp_preference_id": preference_id,
                 "amount_clp": amount_clp,
-                "buyer_raw": buyer,
                 "is_anonymous": is_anonymous,
+                "buyer_raw": {
+                    "name": name_raw,
+                    "email": email_raw,
+                },
+                "client_ip": client_ip,
+                "user_agent": user_agent,
             },
             gateway="mercadopago",
         ),
