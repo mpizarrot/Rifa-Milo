@@ -32,7 +32,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let creatingPreference = false;
   let walletController = null;
-  let lastSignature = null; // para no recrear si nada cambió
+  let lastSignature = null;  // estado con el que se creó la última preferencia
+  let pendingUpdate = false; // indica si hubo cambios mientras se creaba la preferencia
 
   async function createOrUpdateWallet() {
     console.log("[checkout_pro] createOrUpdateWallet llamado");
@@ -61,10 +62,11 @@ document.addEventListener("DOMContentLoaded", () => {
       readyForPayment,
     });
 
-    // Si NO estamos listos para pagar: ocultar y desmontar si existe
+    // Si NO estamos listos para pagar: desmontar y ocultar wallet
     if (!readyForPayment) {
       console.log("[checkout_pro] no listo para pagar, desmontando wallet si existe");
       lastSignature = null;
+      pendingUpdate = false;
 
       if (walletController) {
         try {
@@ -87,7 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
       walletContainer.classList.remove("hidden");
     }
 
-    // Crear firma del estado actual (para no recrear si es igual)
+    // Firma del estado actual
     const signature = JSON.stringify({
       numbers: selectedNumbers,
       name,
@@ -95,20 +97,22 @@ document.addEventListener("DOMContentLoaded", () => {
       phone,
     });
 
-    if (signature === lastSignature && walletController) {
+    // Si ya hay una preferencia para este mismo estado y el wallet está montado, no hacer nada
+    if (!creatingPreference && signature === lastSignature && walletController) {
       console.log("[checkout_pro] estado no cambió, no recreo wallet");
       return;
     }
 
-    // Si cambió algo, guardamos firma y recreamos
-    lastSignature = signature;
-
+    // Si YA se está creando una preferencia, marcamos que hay cambios pendientes
     if (creatingPreference) {
-      console.log("[checkout_pro] ya se está creando una preferencia, salgo");
+      console.log("[checkout_pro] ya se está creando una preferencia, marco pendingUpdate");
+      pendingUpdate = true;
       return;
     }
 
+    // Empezamos una nueva creación de preferencia con el estado actual
     creatingPreference = true;
+    pendingUpdate = false;  // vamos a trabajar con este snapshot
 
     // Desmontar wallet anterior si existía
     if (walletController) {
@@ -138,6 +142,12 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (err) {
       console.error("[checkout_pro] Error de red al crear preferencia:", err);
       creatingPreference = false;
+      // Si hubo cambios mientras tanto, reintentar
+      if (pendingUpdate) {
+        console.log("[checkout_pro] reintentando tras error de red por pendingUpdate=true");
+        pendingUpdate = false;
+        createOrUpdateWallet();
+      }
       return;
     }
 
@@ -147,6 +157,11 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (err) {
       console.error("[checkout_pro] Error parseando respuesta de preferencia:", err);
       creatingPreference = false;
+      if (pendingUpdate) {
+        console.log("[checkout_pro] reintentando tras error de parseo por pendingUpdate=true");
+        pendingUpdate = false;
+        createOrUpdateWallet();
+      }
       return;
     }
 
@@ -155,6 +170,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!resp.ok || !data.preference_id) {
       console.error("[checkout_pro] Error creando preferencia:", data);
       creatingPreference = false;
+      if (pendingUpdate) {
+        console.log("[checkout_pro] reintentando tras error de preferencia por pendingUpdate=true");
+        pendingUpdate = false;
+        createOrUpdateWallet();
+      }
       return;
     }
 
@@ -168,11 +188,19 @@ document.addEventListener("DOMContentLoaded", () => {
         },
       });
       console.log("[checkout_pro] Wallet Brick creado OK");
+      // Recién ahora damos por bueno este estado
+      lastSignature = signature;
     } catch (err) {
       console.error("[checkout_pro] Error creando Wallet Brick:", err);
       walletController = null;
     } finally {
       creatingPreference = false;
+      // Si hubo cambios durante la creación, volvemos a lanzar
+      if (pendingUpdate) {
+        console.log("[checkout_pro] había cambios pendientes, relanzando createOrUpdateWallet");
+        pendingUpdate = false;
+        createOrUpdateWallet();
+      }
     }
   }
 
