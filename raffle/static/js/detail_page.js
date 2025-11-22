@@ -164,6 +164,11 @@
       return;
     }
 
+    if (data.redirect_url) {
+      window.location.href = data.redirect_url;
+      return;
+    }
+
     window.selected.clear();
     refreshSummary();
     document.body.dispatchEvent(new Event("refreshGrid"));
@@ -173,6 +178,7 @@
       `Tus números han sido reservados para transferencia. ` +
       `Tienes 12 horas para realizarla. ` +
       (until ? `Reserva válida hasta: ${until}` : "");
+
   }
 
   transferBtn?.addEventListener("click", reserveByTransfer);

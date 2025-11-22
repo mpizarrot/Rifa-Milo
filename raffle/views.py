@@ -443,11 +443,14 @@ def transfer_reserve(request):
             },
         )
 
+    success_url = reverse("payment_success") + "?kind=transfer"
+
     return JsonResponse(
         {
             "ok": True,
             "reserved_until": expires_at.isoformat(),
             "count": len(chosen_numbers),
+            "redirect_url": success_url,
         }
     )
 
@@ -872,13 +875,15 @@ def prizes_page(request):
 @require_GET
 def payment_success(request):
     """
-    Página limpia que se muestra cuando Mercado Pago redirige con pago aprobado.
-    Sirve tanto para rifa como para donación.
+    Página limpia que se muestra cuando:
+    - MP redirige con pago aprobado (rifa o donación).
+    - Se reserva por transferencia (kind=transfer).
     """
-    kind = request.GET.get("kind", "raffle")  # 'raffle' o 'donation'
-    is_donation = (kind == "donation")
+    kind = request.GET.get("kind", "raffle")  # 'raffle', 'donation' o 'transfer'
 
     context = {
-        "is_donation": is_donation,
+        "kind": kind,
+        "is_donation": (kind == "donation"),
+        "is_transfer": (kind == "transfer"),
     }
     return render(request, "raffle/payment_success.html", context)
