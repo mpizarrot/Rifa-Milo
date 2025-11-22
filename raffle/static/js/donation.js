@@ -18,7 +18,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const nameInput = document.getElementById("buyer_name");
   const emailInput = document.getElementById("buyer_email");
-  const phoneInput = document.getElementById("buyer_phone");
 
   const walletContainer = document.getElementById("walletBrick_container");
 
@@ -38,13 +37,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const amount = parseInt(amountInput?.value || "0", 10) || 0;
     const name = (nameInput?.value || "").trim();
     const email = (emailInput?.value || "").trim();
-    const phone = (phoneInput?.value || "").trim();
 
     amountDisplay.textContent = formatAmountCLP(amount);
 
     const hasValidAmount = amount >= 1000; // mínimo sugerido
-    const hasBuyer = name && email && email.includes("@");
-    const readyForPayment = hasValidAmount && hasBuyer;
+    const readyForPayment = hasValidAmount;
 
     if (!readyForPayment) {
       lastSignature = null;
@@ -69,7 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
       walletContainer.classList.remove("hidden");
     }
 
-    const signature = JSON.stringify({ amount, name, email, phone });
+    const signature = JSON.stringify({ amount, name, email });
     if (signature === lastSignature && walletController) {
       console.log("[donation] estado no cambió, no recreo wallet");
       return;
@@ -101,7 +98,7 @@ document.addEventListener("DOMContentLoaded", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount_clp: amount,
-          buyer: { name, email, phone },
+          buyer: { name, email },
         }),
       });
     } catch (err) {
@@ -145,7 +142,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  const inputs = [amountInput, nameInput, emailInput, phoneInput];
+  const inputs = [amountInput, nameInput, emailInput];
   inputs.forEach((el) => {
     el?.addEventListener("input", () => {
       createOrUpdateWallet();

@@ -607,7 +607,7 @@ def donation_page(request):
 def create_donation_preference(request):
     """
     Crea una preferencia de MercadoPago para una DONACIÓN (monto libre).
-    No genera tickets; solo registra un Payment pendiente.
+    Ahora el donante puede ser anónimo: solo se exige el monto.
     """
     raffle = _get_active_raffle()
     if not raffle:
@@ -621,16 +621,24 @@ def create_donation_preference(request):
     amount_clp = int(data.get("amount_clp") or 0)
     buyer = data.get("buyer") or {}
 
-    name = (buyer.get("name") or "").strip()
-    email = (buyer.get("email") or "").strip()
-    phone = (buyer.get("phone") or "").strip()
-
     if amount_clp <= 0:
         return JsonResponse({"error": "Debes ingresar un monto válido"}, status=400)
-    if not name or not email or "@" not in email:
-        return JsonResponse({"error": "Debes ingresar nombre y un correo válido"}, status=400)
 
-    # Referencia única para esta donación
+    # Datos opcionales (pueden venir vacíos)
+    name_raw = (buyer.get("name") or "").strip()
+    email_raw = (buyer.get("email") or "").strip()
+    phone = ""
+
+    # Para el modelo Payment, estos campos no aceptan null, así que usamos valores seguros
+    buyer_name = name_raw or "Anónimo"
+    if email_raw and "@" in email_raw:
+        buyer_email = email_raw
+        is_anonymous = False
+    else:
+        # Email dummy solo para cumplir la validación del modelo
+        buyer_email = f"anon_{uuid4().hex[:10]}@example.com"
+        is_anonymous = True
+
     external_reference = f"donation-{raffle.id}-{int(timezone.now().timestamp())}"
 
     base_url = getattr(
@@ -639,7 +647,6 @@ def create_donation_preference(request):
         request.build_absolute_uri("/").rstrip("/")
     )
 
-    # Redirige de vuelta a /donar/
     success_url = f"{base_url}/donar/?ok=1"
     failure_url = f"{base_url}/donar/?fail=1"
     pending_url = f"{base_url}/donar/?pending=1"
@@ -666,8 +673,13 @@ def create_donation_preference(request):
         "metadata": {
             "is_donation": True,
             "raffle_id": raffle.id,
-            "buyer": buyer,
+            "buyer": {
+                "name": name_raw,
+                "email": email_raw,
+                "phone": phone,
+            },
             "amount_clp": amount_clp,
+            "is_anonymous": is_anonymous,
         },
         "notification_url": notification_url,
     }
@@ -702,8 +714,7 @@ def create_donation_preference(request):
 
     preference_id = body["id"]
 
-    # Guardamos Payment pendiente (no habrá chosen_numbers ni Tickets)
-    from .models import Payment  # ya lo tienes importado arriba, puedes omitir esta línea si ya está
+    from .models import Payment
 
     Payment.objects.update_or_create(
         gateway_payment_id=external_reference,
@@ -711,14 +722,16 @@ def create_donation_preference(request):
             raffle=raffle,
             amount_clp=amount_clp,
             status="pending",
-            buyer_name=name,
-            buyer_email=email,
+            buyer_name=buyer_name,
+            buyer_email=buyer_email,
             buyer_phone=phone,
             chosen_number=0,
             metadata={
                 "is_donation": True,
                 "mp_preference_id": preference_id,
                 "amount_clp": amount_clp,
+                "buyer_raw": buyer,
+                "is_anonymous": is_anonymous,
             },
             gateway="mercadopago",
         ),
