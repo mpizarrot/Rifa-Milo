@@ -644,7 +644,6 @@ def export_payments_csv(request, raffle_id: int):
 # ============== donaciones ======================== #
 
 @ensure_csrf_cookie
-@require_GET
 def donation_page(request):
     """
     Página simple para recibir donaciones (sin elegir números).
