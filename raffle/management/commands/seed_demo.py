@@ -9,7 +9,7 @@ class Command(BaseCommand):
             Raffle.objects.create(
                 title="Rifa Milo",
                 description="Rifa para ayudar a Milo 🐶. Elige un número y paga para participar.",
-                price_clp=2000, numbers_total=500, is_active=True
+                price_clp=3000, numbers_total=500, is_active=True
             )
             self.stdout.write(self.style.SUCCESS("Rifa demo creada"))
         else:

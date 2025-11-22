@@ -587,3 +587,141 @@ def export_payments_csv(request, raffle_id: int):
         writer.writerow([p.raffle_id, p.status, p.amount_clp, p.gateway, p.gateway_payment_id,
                          p.buyer_name, p.buyer_email, p.buyer_phone, p.created_at, p.paid_at])
     return resp
+
+# ============== donaciones ======================== #
+
+@require_GET
+def donation_page(request):
+    """
+    Página simple para recibir donaciones (sin elegir números).
+    """
+    raffle = _get_active_raffle()
+    return render(request, "raffle/donate.html", {
+        "raffle": raffle,
+        "MP_PUBLIC_KEY": getattr(settings, "MP_PUBLIC_KEY", ""),
+    })
+
+
+@csrf_exempt
+@require_POST
+def create_donation_preference(request):
+    """
+    Crea una preferencia de MercadoPago para una DONACIÓN (monto libre).
+    No genera tickets; solo registra un Payment pendiente.
+    """
+    raffle = _get_active_raffle()
+    if not raffle:
+        return JsonResponse({"error": "No hay rifa activa"}, status=400)
+
+    try:
+        data = json.loads(request.body.decode())
+    except Exception:
+        return JsonResponse({"error": "JSON inválido"}, status=400)
+
+    amount_clp = int(data.get("amount_clp") or 0)
+    buyer = data.get("buyer") or {}
+
+    name = (buyer.get("name") or "").strip()
+    email = (buyer.get("email") or "").strip()
+    phone = (buyer.get("phone") or "").strip()
+
+    if amount_clp <= 0:
+        return JsonResponse({"error": "Debes ingresar un monto válido"}, status=400)
+    if not name or not email or "@" not in email:
+        return JsonResponse({"error": "Debes ingresar nombre y un correo válido"}, status=400)
+
+    # Referencia única para esta donación
+    external_reference = f"donation-{raffle.id}-{int(timezone.now().timestamp())}"
+
+    base_url = getattr(
+        settings,
+        "MP_PUBLIC_BASE_URL",
+        request.build_absolute_uri("/").rstrip("/")
+    )
+
+    # Redirige de vuelta a /donar/
+    success_url = f"{base_url}/donar/?ok=1"
+    failure_url = f"{base_url}/donar/?fail=1"
+    pending_url = f"{base_url}/donar/?pending=1"
+    notification_url = f"{base_url}{reverse('mp_webhook')}"
+
+    pref_body = {
+        "items": [
+            {
+                "id": f"donation-{raffle.id}",
+                "title": f"Donación para {raffle.title}",
+                "quantity": 1,
+                "unit_price": float(amount_clp),
+                "currency_id": "CLP",
+                "category_id": "donations",
+                "description": f"Donación voluntaria para la rifa '{raffle.title}'",
+            }
+        ],
+        "back_urls": {
+            "success": success_url,
+            "failure": failure_url,
+            "pending": pending_url,
+        },
+        "external_reference": external_reference,
+        "metadata": {
+            "is_donation": True,
+            "raffle_id": raffle.id,
+            "buyer": buyer,
+            "amount_clp": amount_clp,
+        },
+        "notification_url": notification_url,
+    }
+
+    if base_url.startswith("https://"):
+        pref_body["auto_return"] = "approved"
+
+    resp = requests.post(
+        "https://api.mercadopago.com/checkout/preferences",
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {settings.MP_ACCESS_TOKEN}",
+        },
+        data=json.dumps(pref_body),
+        timeout=20,
+    )
+
+    try:
+        body = resp.json()
+    except Exception:
+        return JsonResponse(
+            {"error": "Respuesta inválida de Mercado Pago", "detail": resp.text},
+            status=400,
+        )
+
+    if resp.status_code >= 300 or "id" not in body:
+        print("MP create_donation_pref error:", body)
+        return JsonResponse(
+            {"error": "Error al crear preferencia", "detail": body},
+            status=400,
+        )
+
+    preference_id = body["id"]
+
+    # Guardamos Payment pendiente (no habrá chosen_numbers ni Tickets)
+    from .models import Payment  # ya lo tienes importado arriba, puedes omitir esta línea si ya está
+
+    Payment.objects.update_or_create(
+        gateway_payment_id=external_reference,
+        defaults=dict(
+            raffle=raffle,
+            amount_clp=amount_clp,
+            status="pending",
+            buyer_name=name,
+            buyer_email=email,
+            buyer_phone=phone,
+            chosen_number=0,
+            metadata={
+                "is_donation": True,
+                "mp_preference_id": preference_id,
+                "amount_clp": amount_clp,
+            },
+            gateway="mercadopago",
+        ),
+    )
+
+    return JsonResponse({"preference_id": preference_id})
