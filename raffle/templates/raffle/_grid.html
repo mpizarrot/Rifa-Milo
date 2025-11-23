@@ -21,11 +21,11 @@
 
 <div class="flex justify-center items-center gap-4 mt-3">
   <button
-    class="px-3 py-1 border rounded"
+    class="px-3 py-1 border rounded {% if current_page <= 1 %}opacity-50 cursor-not-allowed{% endif %}"
     hx-get="{% url 'grid_page' %}?page={{ current_page|add:'-1' }}"
     hx-target="#numbers-grid"
     hx-swap="innerHTML"
-    {% if current_page <= 1 %}disabled class="px-3 py-1 border rounded opacity-50 cursor-not-allowed"{% endif %}
+    {% if current_page <= 1 %}disabled{% endif %}
     aria-label="Anterior">◀︎</button>
 
   <span class="text-sm">{{ current_page }} / {{ page_count }}</span>
