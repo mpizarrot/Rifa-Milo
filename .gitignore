@@ -65,3 +65,6 @@ pip-wheel-metadata/
 # === Otros archivos potenciales ===
 *.sqlite3
 *.bak
+*.json
+*.gz
+*.ipynb

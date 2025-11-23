@@ -1,4 +1,6 @@
 from django.contrib import admin, messages
+from django.urls import reverse
+from django.utils.html import format_html
 
 from .models import Raffle, Payment, Ticket
 from .views import _confirm_tickets_from_payment_id
@@ -60,6 +62,24 @@ class TicketAdmin(admin.ModelAdmin):
 
 @admin.register(Raffle)
 class RaffleAdmin(admin.ModelAdmin):
-    list_display = ("id", "title", "price_clp", "numbers_total", "is_active")
+    list_display = (
+        "id",
+        "title",
+        "price_clp",
+        "numbers_total",
+        "is_active",
+        "export_links",
+    )
     list_filter = ("is_active",)
     search_fields = ("title",)
+
+    def export_links(self, obj):
+        url_tickets = reverse("export_tickets_csv", args=[obj.id])
+        url_payments = reverse("export_payments_csv", args=[obj.id])
+        return format_html(
+            '<a href="{}">Tickets CSV</a> | <a href="{}">Pagos CSV</a>',
+            url_tickets,
+            url_payments,
+        )
+
+    export_links.short_description = "Exportar"
