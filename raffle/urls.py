@@ -7,8 +7,8 @@ urlpatterns = [
     path("api/grid/", views.grid_page, name="grid_page"),
 
     # Export CSV (solo staff)
-    path("admin/export/raffle/<int:raffle_id>/tickets.csv", views.export_tickets_csv, name="export_tickets_csv"),
-    path("admin/export/raffle/<int:raffle_id>/payments.csv", views.export_payments_csv, name="export_payments_csv"),
+    path("export/raffle/<int:raffle_id>/tickets.csv", views.export_tickets_csv, name="export_tickets_csv"),
+    path("export/raffle/<int:raffle_id>/payments.csv", views.export_payments_csv, name="export_payments_csv"),
 
     # MP
     path("mp/create_preference/", views.create_preference, name="create_preference"),
