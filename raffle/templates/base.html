@@ -21,6 +21,10 @@
       if (csrftoken) e.detail.headers["X-CSRFToken"] = csrftoken;
     });
   </script>
+
+  <link rel="icon" href="{% static 'img/favicon.ico' %}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32x32.png' %}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicon-16x16.png' %}">
 </head>
 
 <body class="min-h-full bg-gray-50 text-gray-900">

@@ -26,6 +26,31 @@
   const transferBtn = document.getElementById("transfer-btn");
   const transferMsg = document.getElementById("transfer-message");
 
+    function pageHasFreeNumbers(root) {
+    if (!root) return true; // si no hay grid, no hacemos nada
+
+    const buttons = root.querySelectorAll(".number-btn");
+    if (!buttons.length) return true; // si no hay botones, tampoco saltamos
+
+    // Consideramos que un número está disponible si el botón NO está disabled
+    // (ajusta esta lógica si tienes otra clase tipo .is-taken)
+    return Array.from(buttons).some((btn) => !btn.disabled);
+  }
+
+  function autoSkipSoldOut(root) {
+    if (!root) return;
+
+    const hasFree = pageHasFreeNumbers(root);
+    if (hasFree) return; // ya hay números disponibles en esta página
+
+    // No hay números disponibles → buscamos el botón "Siguiente"
+    const nextBtn = document.querySelector("[data-grid-next]");
+    if (nextBtn && !nextBtn.disabled) {
+      // Esto hará que HTMX cargue la siguiente página
+      nextBtn.click();
+    }
+  }
+
   // Si no estamos en la página de la rifa (no hay grilla ni resumen), salimos
   if (!grid || !selCount || !selList || !selTotal) {
     console.warn("[detail_page] No se encontraron elementos de selección; no se inicializa script.");
@@ -130,6 +155,8 @@
           );
         }
       });
+      // Después de cargar una nueva página de números, saltar si está llena
+      autoSkipSoldOut(e.target);
     }
   });
 
@@ -218,4 +245,6 @@
 
   // Init
   refreshSummary();
+  // Si la primera página está completamente vendida, saltar automáticamente
+  autoSkipSoldOut(grid);
 })();
