@@ -25,6 +25,15 @@
   const transferSection = document.getElementById("transfer-section");
   const transferBtn = document.getElementById("transfer-btn");
   const transferMsg = document.getElementById("transfer-message");
+  const globalLoader = document.getElementById("global-loader");
+
+  function showLoader() {
+    if (globalLoader) globalLoader.classList.remove("hidden");
+  }
+
+  function hideLoader() {
+    if (globalLoader) globalLoader.classList.add("hidden");
+  }
 
     function pageHasFreeNumbers(root) {
     if (!root) return true; // si no hay grid, no hacemos nada
@@ -184,26 +193,37 @@
       return;
     }
 
-    transferMsg.textContent = "Creando reserva para transferencia...";
+    // Mostrar loader y deshabilitar botón
+    if (transferBtn) transferBtn.disabled = true;
+    if (transferMsg) {
+      transferMsg.textContent = "Creando reserva para transferencia...";
+    }
+    showLoader();
 
-    let resp;
-    let data = null;
-
+    let resp, data;
     try {
-      resp = await fetch("/transfer/reserve/", {
+      resp = await fetch("/api/reserve/transfer/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-CSRFToken": csrftoken || "",
         },
         body: JSON.stringify({
-          chosen_numbers: numbers,
-          buyer: { name, email, phone },
+          raffle_id: RAFFLE_ID,
+          numbers,
+          name,
+          email,
+          phone,
         }),
       });
     } catch (e) {
       console.error("Error de red en reserva por transferencia:", e);
-      transferMsg.textContent = "No se pudo contactar al servidor. Intenta nuevamente.";
+      if (transferMsg) {
+        transferMsg.textContent =
+          "No se pudo contactar al servidor. Intenta nuevamente.";
+      }
+      hideLoader();
+      if (transferBtn) transferBtn.disabled = false;
       return;
     }
 
@@ -218,7 +238,10 @@
       const msg =
         (data && data.error) ||
         "No se pudo crear la reserva. Verifica tus datos o intenta nuevamente.";
-      transferMsg.textContent = msg;
+      if (transferMsg) transferMsg.textContent = msg;
+
+      hideLoader();
+      if (transferBtn) transferBtn.disabled = false;
       return;
     }
 
@@ -228,16 +251,22 @@
     document.body.dispatchEvent(new Event("refreshGrid"));
 
     const until = data.reserved_until || "";
-    transferMsg.textContent =
-      `Tus números han sido reservados para transferencia. ` +
-      `Tienes 12 horas para realizarla. ` +
-      (until ? `Reserva válida hasta: ${until}` : "");
+    if (transferMsg) {
+      transferMsg.textContent =
+        `Tus números han sido reservados para transferencia. ` +
+        `Tienes 12 horas para realizarla. ` +
+        (until ? `Reserva válida hasta: ${until}` : "");
+    }
 
+    // Si hay redirect, dejamos el loader puesto hasta cambiar de página
     if (data.redirect_url) {
-      // Redirigir después de un pequeño delay, solo para que el usuario vea el mensaje
       setTimeout(() => {
         window.location.href = data.redirect_url;
       }, 1500);
+    } else {
+      // Si no hay redirect, entonces liberamos loader y botón
+      hideLoader();
+      if (transferBtn) transferBtn.disabled = false;
     }
   }
 

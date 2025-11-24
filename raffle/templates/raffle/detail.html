@@ -152,7 +152,7 @@
         Haz click aquí <span class="font-semibold">SOLO</span> si quieres pagar por este medio.
         <br>
         <span class="text-xs">
-          (Tus números quedarán reservados por 12 horas hasta que comprobemos el pago)
+          Los datos de transferencia aparecerán cuando hagas la reserva.
         </span>
       </p>
       <p id="transfer-message" class="mt-2 text-xs text-gray-700"></p>
@@ -163,9 +163,15 @@
         Reservar números para transferencia
       </button>
     </div>
-
-
   </div>
+</div>
+
+<div
+  id="global-loader"
+  class="fixed inset-0 flex items-center justify-center z-50 hidden"
+  style="background: rgba(255, 255, 255, 0.75);"
+>
+  <div class="h-12 w-12 rounded-full border-4 border-gray-300 border-t-gray-700 animate-spin"></div>
 </div>
 
 {% endif %}
