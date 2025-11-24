@@ -200,20 +200,19 @@
     }
     showLoader();
 
-    let resp, data;
+    let resp;
+    let data = null;
+
     try {
-      resp = await fetch("/api/reserve/transfer/", {
+      resp = await fetch("/transfer/reserve/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-CSRFToken": csrftoken || "",
         },
         body: JSON.stringify({
-          raffle_id: RAFFLE_ID,
-          numbers,
-          name,
-          email,
-          phone,
+          chosen_numbers: numbers,
+          buyer: { name, email, phone },
         }),
       });
     } catch (e) {
