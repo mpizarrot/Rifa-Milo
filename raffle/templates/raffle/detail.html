@@ -137,31 +137,41 @@
       <div class="truncate"><strong>Números:</strong> <span id="selected-list">—</span></div>
       <div class="mt-1"><strong>Total:</strong> $<span id="selected-total">0</span> CLP</div>
       <p class="text-xs text-gray-500 mt-1">
-        El botón de pago aparecerá cuando selecciones números e ingreses tu nombre y correo.
-        También puedes reservar los números y pagar con transferencia.
+        Puedes pagar con débito o crédito por Mercado Pago o con transferencia bancaria.
       </p>
     </div>
 
-    <!-- Botón / Brick de Mercado Pago -->
-    <div id="walletBrick_container" class="mt-4"></div>
+    <!-- Acciones de pago: Mercado Pago + Transferencia -->
+    <div class="mt-4 space-y-3" id="payment-actions">
+      <!-- Botón / Brick de Mercado Pago -->
+      <div id="wallet-wrapper" class="w-full">
+        <div
+          id="walletBrick_container"
+          class="w-full min-h-[64px] flex items-center justify-center"
+        >
+          <p id="wallet-placeholder" class="text-xs text-gray-500 text-center px-2">
+            El botón de pago aparecerá aquí cuando selecciones tus números
+            e ingreses tu nombre y correo.
+          </p>
+        </div>
+      </div>
 
-    <!-- Opción de transferencia -->
-    <div id="transfer-section" class="mt-6 text-sm border-t pt-4">
-      <p class="font-semibold mb-1">¿Prefieres pagar por transferencia?</p>
-      <p class="text-gray-700 mb-2">
-        Haz click aquí <span class="font-semibold">SOLO</span> si quieres pagar por este medio.
-        <br>
-        <span class="text-xs">
-          Los datos de transferencia aparecerán cuando hagas la reserva.
-        </span>
-      </p>
-      <p id="transfer-message" class="mt-2 text-xs text-gray-700"></p>
-      <button
-        id="transfer-btn"
-        type="button"
-        class="w-full px-3 py-2 rounded-md border bg-white hover:bg-gray-100 text-sm">
-        Reservar números para transferencia
-      </button>
+      <!-- Opción de transferencia -->
+      <div id="transfer-section" class="text-sm">
+        <button
+          id="transfer-btn"
+          type="button"
+          class="w-full px-3 py-2 rounded-md border bg-white hover:bg-gray-100 text-sm"
+        >
+          Reservar números para transferencia
+        </button>
+
+        <p class="mt-1 text-xs text-gray-600 text-center">
+          Haz click aquí <span class="font-semibold">SOLO</span> si quieres pagar por transferencia.
+        </p>
+
+        <p class="mt-2 text-xs text-gray-700" id="transfer-message"></p>
+      </div>
     </div>
   </div>
 </div>

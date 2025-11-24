@@ -62,7 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
       readyForPayment,
     });
 
-    // Si NO estamos listos para pagar: desmontar y ocultar wallet
+    // Si NO estamos listos para pagar: desmontar y mostrar texto de ayuda
     if (!readyForPayment) {
       console.log("[checkout_pro] no listo para pagar, desmontando wallet si existe");
       lastSignature = null;
@@ -78,15 +78,16 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       if (walletContainer) {
-        walletContainer.classList.add("hidden");
-        walletContainer.innerHTML = "";
+        // Mantener visible el contenedor y mostrar el placeholder
+        walletContainer.classList.remove("hidden");
+        walletContainer.innerHTML = `
+          <p id="wallet-placeholder" class="text-xs text-gray-500 text-center px-2">
+            El botón de pago aparecerá aquí cuando selecciones tus números
+            e ingreses tu nombre y correo.
+          </p>
+        `;
       }
       return;
-    }
-
-    // Desde aquí sí estamos listos para pagar
-    if (walletContainer) {
-      walletContainer.classList.remove("hidden");
     }
 
     // Firma del estado actual
@@ -182,6 +183,12 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("[checkout_pro] preferenceId:", preferenceId);
 
     try {
+      if (walletContainer) {
+        // Aseguramos que el contenedor esté visible y vacío
+        walletContainer.classList.remove("hidden");
+        walletContainer.innerHTML = "";
+      }
+
       walletController = await bricksBuilder.create("wallet", "walletBrick_container", {
         initialization: {
           preferenceId: preferenceId,
