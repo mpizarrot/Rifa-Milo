@@ -14,14 +14,42 @@ def mark_as_paid_and_create_tickets(modeladmin, request, queryset):
     - Crear los Tickets a partir de metadata['chosen_numbers'].
     Pensado especialmente para pagos por transferencia.
     """
-    count = 0
+    count_ok = 0
+    count_fail = 0
+
     for p in queryset:
-        ok = _confirm_tickets_from_payment_id(p.gateway_payment_id)
+        try:
+            ok = _confirm_tickets_from_payment_id(p.gateway_payment_id)
+        except Exception as e:
+            count_fail += 1
+            messages.error(
+                request,
+                (
+                    f"Error al confirmar tickets para payment ID={p.id} "
+                    f"(gateway_payment_id={p.gateway_payment_id}): {e!r}"
+                ),
+            )
+            continue
+
         if ok:
-            count += 1
+            count_ok += 1
         else:
-            messages.warning(request, f"No se pudieron confirmar tickets para {p.gateway_payment_id}")
-    messages.success(request, f"Se marcaron {count} pagos como pagados y se crearon los tickets.")
+            count_fail += 1
+            messages.warning(
+                request,
+                f"No se pudieron confirmar tickets para {p.gateway_payment_id} (no se encontró el pago o no tenía números).",
+            )
+
+    if count_ok:
+        messages.success(
+            request,
+            f"Se marcaron {count_ok} pago(s) como pagados y se crearon los tickets.",
+        )
+    if count_fail and not count_ok:
+        messages.warning(
+            request,
+            f"No se pudieron procesar {count_fail} pago(s). Revisa los mensajes de error más arriba.",
+        )
 
 
 @admin.register(Payment)
