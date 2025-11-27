@@ -159,7 +159,9 @@ def _confirm_tickets_from_payment_id(gateway_payment_id: str):
     """
     with transaction.atomic():
         try:
-            p = Payment.objects.select_for_update().get(gateway_payment_id=gateway_payment_id)
+            p = Payment.objects.select_for_update().get(
+                gateway_payment_id=gateway_payment_id
+            )
         except Payment.DoesNotExist:
             return False
 
@@ -170,28 +172,31 @@ def _confirm_tickets_from_payment_id(gateway_payment_id: str):
             p.save()
 
         # Números a emitir
-        chosen_numbers = []
+        chosen_numbers: list[int] = []
         if isinstance(p.metadata, dict) and "chosen_numbers" in p.metadata:
-            chosen_numbers = [int(x) for x in p.metadata.get("chosen_numbers", [])]
-        elif getattr(p, "chosen_number", None):
-            chosen_numbers = [int(p.chosen_number)]
-
-        # Crear tickets por cada número (respetando UNIQUE(raffle, number))
-        for n in chosen_numbers:
             try:
-                Ticket.objects.create(
-                    raffle=p.raffle,
-                    number=n,
-                    payment=p,
-                    buyer_name=p.buyer_name,
-                    buyer_email=p.buyer_email,
-                    buyer_phone=p.buyer_phone,
-                )
-            except IntegrityError:
-                # Choque por número ya tomado (concurrencia). Aquí podrías:
-                # - Registrar incidencia para reembolso/cambio
-                # - Guardar en p.metadata['conflicts'] = [...]
-                pass
+                chosen_numbers = [int(x) for x in p.metadata.get("chosen_numbers", [])]
+            except (TypeError, ValueError):
+                chosen_numbers = []
+        elif getattr(p, "chosen_number", None):
+            try:
+                chosen_numbers = [int(p.chosen_number)]
+            except (TypeError, ValueError):
+                chosen_numbers = []
+
+        # Crear tickets por cada número, de forma idempotente
+        for n in chosen_numbers:
+            # get_or_create evita IntegrityError por UNIQUE(raffle, number)
+            Ticket.objects.get_or_create(
+                raffle=p.raffle,
+                number=n,
+                defaults={
+                    "payment": p,
+                    "buyer_name": p.buyer_name,
+                    "buyer_email": p.buyer_email,
+                    "buyer_phone": p.buyer_phone,
+                },
+            )
 
     return True
 
