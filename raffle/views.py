@@ -460,7 +460,7 @@ def transfer_reserve(request):
         if conflict:
             return JsonResponse(
                 {
-                    "error": "Algunos números ya no están disponibles",
+                    "error": "Algunos números ya no están disponibles. Recarga la página para verlos.",
                     "conflict_numbers": sorted(conflict),
                 },
                 status=409,
@@ -553,7 +553,7 @@ def reserve_from_failed_payment(request):
         if conflict:
             return JsonResponse(
                 {
-                    "error": "Algunos números ya no están disponibles",
+                    "error": "Algunos números ya no están disponibles. Recarga la página para verlos.",
                     "conflict_numbers": sorted(conflict),
                 },
                 status=409,
@@ -736,7 +736,13 @@ def mp_webhook(request):
             _confirm_tickets_from_payment_id(external_ref)
         elif pstatus in ("rejected", "cancelled") and preference_id:
             print("   >> Pago rechazado/cancelado, marcando Payment como failed:", preference_id)
-            Payment.objects.filter(gateway_payment_id=preference_id).update(status="failed")
+            # Buscamos por el mp_preference_id que guardamos en metadata
+            qs = Payment.objects.filter(
+                gateway="mercadopago",
+                metadata__mp_preference_id=preference_id,
+            )
+            updated = qs.update(status="failed")
+            print(f"   >> Payments marcados como failed: {updated}")
 
         return HttpResponse("ok", status=200)
 
