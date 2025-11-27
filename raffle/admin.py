@@ -1,3 +1,4 @@
+import json
 from django.contrib import admin, messages
 from django.urls import reverse
 from django.utils.html import format_html
@@ -78,22 +79,46 @@ class PaymentAdmin(admin.ModelAdmin):
         "buyer_name",
         "buyer_email",
         "created_at",
-        "expires_at",
-        "reserved_numbers",
+        "chosen_numbers_display",
+        "conflict_numbers_display",
     )
     list_filter = ("gateway", "status", "raffle")
     search_fields = ("buyer_name", "buyer_email", "gateway_payment_id")
     actions = [mark_as_paid_and_create_tickets]
+    readonly_fields = ("metadata_pretty",)
 
-    def reserved_numbers(self, obj):
+    # Números originalmente elegidos (chosen_numbers / chosen_number legacy)
+    def chosen_numbers_display(self, obj):
         meta = obj.metadata or {}
-        nums = meta.get("chosen_numbers", [])
+        nums = meta.get("chosen_numbers") or []
+        if not nums and getattr(obj, "chosen_number", None):
+            return str(obj.chosen_number)
         if not nums:
-            if getattr(obj, "chosen_number", None):
-                return str(obj.chosen_number)
             return "-"
         return ", ".join(str(n) for n in nums)
-    reserved_numbers.short_description = "Números reservados"
+
+    chosen_numbers_display.short_description = "Números elegidos"
+
+    # Números en conflicto (ya vendidos a otra persona)
+    def conflict_numbers_display(self, obj):
+        meta = obj.metadata or {}
+        nums = meta.get("conflict_numbers") or []
+        if not nums:
+            return "-"
+        return ", ".join(str(n) for n in nums)
+
+    conflict_numbers_display.short_description = "Números en conflicto"
+
+    # Ver metadata completo en detalle del Payment
+    def metadata_pretty(self, obj):
+        if not obj.metadata:
+            return "-"
+        try:
+            return json.dumps(obj.metadata, ensure_ascii=False, indent=2)
+        except TypeError:
+            return str(obj.metadata)
+
+    metadata_pretty.short_description = "Metadata (JSON)"
 
 
 @admin.register(Ticket)
