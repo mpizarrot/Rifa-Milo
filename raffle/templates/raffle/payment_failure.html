@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Pago rechazado{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto text-center mt-10 mb-10 bg-white rounded-2xl shadow p-6">
+  {% if is_donation %}
+    <h1 class="text-2xl font-bold mb-3">El pago de tu donación fue rechazado 😔</h1>
+    <p class="text-gray-700 mb-4">
+      Tu donación no pudo completarse con Mercado Pago.
+      Puedes intentarlo nuevamente o, si prefieres, hacer tu aporte por transferencia bancaria.
+    </p>
+
+    <!-- Datos de transferencia + botón copiar -->
+    <div class="mt-8">
+      <div class="rounded-lg border bg-white p-4 shadow-sm transfer-data-block">
+        <div class="text-left">
+          <p class="text-sm font-semibold mb-2">Datos para transferencia</p>
+
+          <dl class="text-sm space-y-1">
+            <div class="flex justify-between">
+              <dt class="text-gray-500">Banco</dt>
+              <dd class="font-medium">Mercado Pago</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-500">Tipo de cuenta</dt>
+              <dd class="font-medium">Cuenta Vista</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-500">N° de cuenta</dt>
+              <dd class="font-medium">1052076645</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-500">RUT</dt>
+              <dd class="font-medium">20.096.901-4</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-500">Nombre</dt>
+              <dd class="font-medium">Marcelo Andrés Pizarro Tapia</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-500">Correo</dt>
+              <dd class="font-medium">marcelo.pizarrotapia@gmail.com</dd>
+            </div>
+          </dl>
+        </div>
+
+        <button
+          type="button"
+          class="mt-4 px-3 py-2 text-xs rounded-md border bg-gray-50 hover:bg-gray-100"
+          data-transfer-name="Marcelo Andrés Pizarro Tapia"
+          data-transfer-rut="20096901-4"
+          data-transfer-bank="Mercado Pago"
+          data-transfer-account-type="Cuenta Vista"
+          data-transfer-account-number="1052076645"
+          data-transfer-email="marcelo.pizarrotapia@gmail.com"
+        >
+          Copiar datos
+        </button>
+
+        <p class="js-copy-feedback mt-2 text-xs text-green-600 hidden">
+          Datos copiados ✅.
+        </p>
+      </div>
+    </div>
+
+    <a href="{% url 'donation_page' %}"
+       class="inline-block mt-6 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">
+      Intentar nuevamente con Mercado Pago
+    </a>
+
+  {% else %}
+    <!-- Caso rifa -->
+    <h1 class="text-2xl font-bold mb-3">El pago de tu compra fue rechazado 😔</h1>
+    <p class="text-gray-700 mb-4">
+      Tu pago no pudo completarse con Mercado Pago.
+      Si prefieres, puedes reservar tus números y pagar por transferencia bancaria.
+    </p>
+
+    <!-- Botón que RESERVA directamente -->
+    <button
+      id="reserve-failed-btn"
+      type="button"
+      class="inline-block mb-4 px-4 py-2 rounded-lg border bg-white hover:bg-gray-100 text-sm font-semibold"
+      data-external-ref="{{ external_reference }}"
+    >
+      Reservar números para transferencia
+    </button>
+
+    <p id="reserve-failed-message" class="mt-2 text-xs text-gray-700"></p>
+
+    <!-- Datos de transferencia, por si alguien prefiere donar así -->
+    <div class="mt-8">
+      <div class="rounded-lg border bg-white p-4 shadow-sm transfer-data-block">
+        <div class="text-left">
+          <p class="text-sm font-semibold mb-2">Datos para transferencia</p>
+
+          <dl class="text-sm space-y-1">
+            <div class="flex justify-between">
+              <dt class="text-gray-500">Banco</dt>
+              <dd class="font-medium">Mercado Pago</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-500">Tipo de cuenta</dt>
+              <dd class="font-medium">Cuenta Vista</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-500">N° de cuenta</dt>
+              <dd class="font-medium">1052076645</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-500">RUT</dt>
+              <dd class="font-medium">20.096.901-4</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-500">Nombre</dt>
+              <dd class="font-medium">Marcelo Andrés Pizarro Tapia</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-500">Correo</dt>
+              <dd class="font-medium">marcelo.pizarrotapia@gmail.com</dd>
+            </div>
+          </dl>
+        </div>
+
+        <button
+          type="button"
+          class="mt-4 px-3 py-2 text-xs rounded-md border bg-gray-50 hover:bg-gray-100"
+          data-transfer-name="Marcelo Andrés Pizarro Tapia"
+          data-transfer-rut="20096901-4"
+          data-transfer-bank="Mercado Pago"
+          data-transfer-account-type="Cuenta Vista"
+          data-transfer-account-number="1052076645"
+          data-transfer-email="marcelo.pizarrotapia@gmail.com"
+        >
+          Copiar datos
+        </button>
+
+        <p class="js-copy-feedback mt-2 text-xs text-green-600 hidden">
+          Datos copiados ✅.
+        </p>
+      </div>
+    </div>
+
+    <a href="{% url 'raffle_detail' %}"
+       class="inline-block mt-6 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">
+      Volver a la rifa
+    </a>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(";").shift();
+    return null;
+  }
+  const csrftoken = getCookie("csrftoken");
+
+  const btn = document.getElementById("reserve-failed-btn");
+  const msg = document.getElementById("reserve-failed-message");
+
+  if (!btn) return;  // solo existe en el caso rifa
+
+  btn.addEventListener("click", async function () {
+    const externalRef = btn.dataset.externalRef || "";
+    if (!externalRef) {
+      msg.textContent = "No pudimos identificar tu intento de pago. Vuelve a elegir tus números en la página principal.";
+      msg.className = "mt-2 text-xs text-red-600";
+      return;
+    }
+
+    btn.disabled = true;
+    msg.textContent = "Reservando tus números...";
+    msg.className = "mt-2 text-xs text-gray-700";
+
+    try {
+      const resp = await fetch("{% url 'reserve_from_failed_payment' %}", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrftoken,
+        },
+        body: JSON.stringify({ external_reference: externalRef }),
+      });
+
+      const data = await resp.json();
+
+      if (!resp.ok || !data.ok) {
+        const err = data.error || "No se pudo reservar. Intenta nuevamente o vuelve a elegir tus números.";
+        msg.textContent = err;
+        msg.className = "mt-2 text-xs text-red-600";
+
+        btn.disabled = false;
+        return;
+      }
+
+      msg.textContent = `¡Listo! ✅ Reservamos ${data.count} número(s): ${data.chosen_numbers.join(", ")}. Tienes 12 horas para hacer la transferencia.`;
+      msg.className = "mt-2 text-xs text-green-700";
+    } catch (e) {
+      console.error(e);
+      msg.textContent = "Error de conexión. Intenta nuevamente.";
+      msg.className = "mt-2 text-xs text-red-600";
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+{% endblock %}

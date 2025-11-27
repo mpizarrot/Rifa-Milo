@@ -32,8 +32,50 @@
     {% block content %}{% endblock %}
   </div>
 
-  <!-- SDK Mercado Pago (necesario antes de mercadopago_brick.js) -->
+  <!-- SDK Mercado Pago -->
   <script src="https://sdk.mercadopago.com/js/v2"></script>
+
+  <!-- Copiar datos de transferencia -->
+  <script>
+  (function () {
+    if (window.__transferCopyInit) return;
+    window.__transferCopyInit = true;
+
+    document.addEventListener("click", async function (ev) {
+      const btn = ev.target.closest("[data-transfer-name]");
+      if (!btn) return;
+
+      const name = btn.dataset.transferName || "";
+      const rut = btn.dataset.transferRut || "";
+      const bank = btn.dataset.transferBank || "";
+      const accountType = btn.dataset.transferAccountType || "";
+      const accountNumber = btn.dataset.transferAccountNumber || "";
+      const email = btn.dataset.transferEmail || "";
+
+      const text = [
+        name,
+        rut,
+        bank,
+        accountType,
+        accountNumber,
+        email,
+      ].join("\n");
+
+      try {
+        await navigator.clipboard.writeText(text);
+
+        const wrapper = btn.closest(".transfer-data-block");
+        const feedback = wrapper && wrapper.querySelector(".js-copy-feedback");
+        if (feedback) {
+          feedback.classList.remove("hidden");
+          setTimeout(() => feedback.classList.add("hidden"), 2500);
+        }
+      } catch (e) {
+        alert("No se pudieron copiar los datos. Copia manualmente, por favor.");
+      }
+    });
+  })();
+  </script>
   
   {% block extra_scripts %}{% endblock %}
 </body>

@@ -22,5 +22,11 @@ urlpatterns = [
     ),
     path("premios/", views.prizes_page, name="prizes_page"),
     path("pago-exitoso/", views.payment_success, name="payment_success"),
+    path("pago-fallido/", views.payment_failure, name="payment_failure"),
+    path(
+        "transfer/reserve-from-failed/",
+        views.reserve_from_failed_payment,
+        name="reserve_from_failed_payment",
+    ),
 ]
 
