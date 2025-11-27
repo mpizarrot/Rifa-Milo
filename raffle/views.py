@@ -155,7 +155,10 @@ def _confirm_tickets_from_payment_id(gateway_payment_id: str):
     """
     Marca Payment como paid (idempotente) y crea Tickets para cada número
     en metadata['chosen_numbers'] (o 'chosen_number' legacy).
-    Requiere que Ticket.payment sea ForeignKey (no OneToOne).
+
+    - Si algunos números ya están vendidos, NO falla:
+      * Crea tickets solo para los disponibles.
+      * Guarda en metadata['conflict_numbers'] los que chocaron.
     """
     with transaction.atomic():
         try:
@@ -165,13 +168,7 @@ def _confirm_tickets_from_payment_id(gateway_payment_id: str):
         except Payment.DoesNotExist:
             return False
 
-        # Marcar pagado si aún no
-        if p.status != "paid":
-            p.status = "paid"
-            p.paid_at = timezone.now()
-            p.save()
-
-        # Números a emitir
+        # Números a emitir según metadata / chosen_number
         chosen_numbers: list[int] = []
         if isinstance(p.metadata, dict) and "chosen_numbers" in p.metadata:
             try:
@@ -184,9 +181,26 @@ def _confirm_tickets_from_payment_id(gateway_payment_id: str):
             except (TypeError, ValueError):
                 chosen_numbers = []
 
-        # Crear tickets por cada número, de forma idempotente
-        for n in chosen_numbers:
-            # get_or_create evita IntegrityError por UNIQUE(raffle, number)
+        if not chosen_numbers:
+            # Nada que emitir
+            if p.status != "paid":
+                p.status = "paid"
+                p.paid_at = timezone.now()
+                p.save()
+            return True
+
+        # Ver qué números YA tienen ticket (para esta rifa)
+        existing = set(
+            Ticket.objects.filter(
+                raffle=p.raffle,
+                number__in=chosen_numbers,
+            ).values_list("number", flat=True)
+        )
+        available = [n for n in chosen_numbers if n not in existing]
+        conflict = sorted(existing)
+
+        # Crear tickets por cada número disponible, de forma idempotente
+        for n in available:
             Ticket.objects.get_or_create(
                 raffle=p.raffle,
                 number=n,
@@ -197,6 +211,24 @@ def _confirm_tickets_from_payment_id(gateway_payment_id: str):
                     "buyer_phone": p.buyer_phone,
                 },
             )
+
+        # Actualizar metadata con info de qué pasó
+        meta = p.metadata or {}
+        if not isinstance(meta, dict):
+            meta = {}
+
+        meta.setdefault("chosen_numbers", chosen_numbers)
+        meta["paid_numbers"] = available
+        meta["conflict_numbers"] = conflict
+
+        p.metadata = meta
+
+        # Marcar pagado si aún no
+        if p.status != "paid":
+            p.status = "paid"
+            p.paid_at = timezone.now()
+
+        p.save()
 
     return True
 

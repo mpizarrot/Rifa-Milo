@@ -15,13 +15,11 @@ def mark_as_paid_and_create_tickets(modeladmin, request, queryset):
     Pensado especialmente para pagos por transferencia.
     """
     count_ok = 0
-    count_fail = 0
 
     for p in queryset:
         try:
             ok = _confirm_tickets_from_payment_id(p.gateway_payment_id)
         except Exception as e:
-            count_fail += 1
             messages.error(
                 request,
                 (
@@ -31,25 +29,42 @@ def mark_as_paid_and_create_tickets(modeladmin, request, queryset):
             )
             continue
 
-        if ok:
-            count_ok += 1
-        else:
-            count_fail += 1
+        if not ok:
             messages.warning(
                 request,
-                f"No se pudieron confirmar tickets para {p.gateway_payment_id} (no se encontró el pago o no tenía números).",
+                f"No se encontró el payment {p.gateway_payment_id} para confirmar.",
+            )
+            continue
+
+        # Revisar metadata por conflictos
+        meta = p.metadata or {}
+        conflict = meta.get("conflict_numbers") or []
+        paid_nums = meta.get("paid_numbers") or meta.get("chosen_numbers") or []
+
+        if conflict:
+            messages.warning(
+                request,
+                (
+                    f"Payment {p.id} marcado como pagado. "
+                    f"Se emitieron tickets para: {', '.join(str(n) for n in paid_nums)}. "
+                    f"Los siguientes números ya estaban vendidos: "
+                    f"{', '.join(str(n) for n in conflict)}. "
+                    f"Contacta a la persona para ofrecer otros números o devolver esa parte."
+                ),
+            )
+        else:
+            messages.success(
+                request,
+                (
+                    f"Payment {p.id} marcado como pagado y tickets creados para: "
+                    f"{', '.join(str(n) for n in paid_nums)}."
+                ),
             )
 
-    if count_ok:
-        messages.success(
-            request,
-            f"Se marcaron {count_ok} pago(s) como pagados y se crearon los tickets.",
-        )
-    if count_fail and not count_ok:
-        messages.warning(
-            request,
-            f"No se pudieron procesar {count_fail} pago(s). Revisa los mensajes de error más arriba.",
-        )
+        count_ok += 1
+
+    if count_ok > 1:
+        messages.info(request, f"Se procesaron {count_ok} pagos.")
 
 
 @admin.register(Payment)
