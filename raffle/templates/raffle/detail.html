@@ -13,9 +13,8 @@
   }
 </style>
 
-<!-- Config para JS externos -->
-<div id="mp-config"
-     data-public-key="{{ MP_PUBLIC_KEY }}"
+<!-- Configuración para JS -->
+<div id="raffle-config"
      data-price="{{ raffle.price_clp }}"
      data-raffle-id="{{ raffle.id }}">
 </div>
@@ -75,22 +74,6 @@
   </div>
 </section>
 
-<!-- BLOQUE DE DONACIONES -->
-<div class="mt-6 mb-6 bg-green-50 border border-green-300 shadow-sm rounded-xl p-4">
-    <h2 class="text-xl font-semibold text-green-800">
-        ¿Quieres ayudar directamente a Milo? 💚
-    </h2>
-    <p class="text-sm text-green-700 mt-1">
-        Milo necesita una cirugía compleja para dejar de cojear.  
-        Si no quieres participar en la rifa pero sí deseas ayudarlo, puedes hacer una donación directa.
-    </p>
-
-    <a href="/donar/"
-       class="inline-block mt-3 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow">
-        HAZ UNA DONACIÓN
-    </a>
-</div>
-
 <div class="grid md:grid-cols-3 gap-6">
   <!-- Grilla 10x10 con paginación -->
   <div class="md:col-span-2">
@@ -123,31 +106,16 @@
     <label class="block text-sm font-medium mb-1">Teléfono (opcional)</label>
     <input id="buyer_phone" type="text" class="w-full border rounded px-3 py-2 mb-4">
 
-    <div class="rounded-lg border p-3 text-sm bg-gray-50 mb-4">
-      <div><strong>Seleccionados:</strong> <span id="selected-count">0</span></div>
-      <div class="truncate"><strong>Números:</strong> <span id="selected-list">—</span></div>
-      <div class="mt-1"><strong>Total:</strong> $<span id="selected-total">0</span> CLP</div>
-      <p class="text-xs text-gray-500 mt-1">
-        Puedes pagar con débito o crédito por Mercado Pago o con transferencia bancaria.
-      </p>
-    </div>
-
-    <!-- Acciones de pago: Mercado Pago + Transferencia -->
-    <div class="mt-4 space-y-3" id="payment-actions">
-      <!-- Botón / Brick de Mercado Pago -->
-      <div id="wallet-wrapper" class="w-full">
-        <div
-          id="walletBrick_container"
-          class="w-full min-h-[64px] flex items-center justify-center"
-        >
-          <p id="wallet-placeholder" class="text-xs text-gray-500 text-center px-2">
-            El botón de pago aparecerá aquí cuando selecciones tus números
-            e ingreses tu nombre y correo.
-          </p>
-        </div>
+      <div class="rounded-lg border p-3 text-sm bg-gray-50 mb-4">
+        <div><strong>Seleccionados:</strong> <span id="selected-count">0</span></div>
+        <div class="truncate"><strong>Números:</strong> <span id="selected-list">—</span></div>
+        <div class="mt-1"><strong>Total:</strong> $<span id="selected-total">0</span> CLP</div>
+        <p class="text-xs text-gray-500 mt-1">
+        Puedes pagar con transferencia bancaria.
+        </p>
       </div>
 
-      <!-- Opción de transferencia -->
+    <div class="mt-4 space-y-3" id="payment-actions">
       <div id="transfer-section" class="text-sm">
         <button
           id="transfer-btn"
@@ -158,7 +126,7 @@
         </button>
 
         <p class="mt-1 text-xs text-gray-600 text-center">
-          Haz click aquí <span class="font-semibold">SOLO</span> si quieres pagar por transferencia.
+          Una vez reservados, tendrás 12 horas para completar tu transferencia.
         </p>
 
         <p class="mt-2 text-xs text-gray-700" id="transfer-message"></p>
@@ -228,10 +196,25 @@
   <div class="h-12 w-12 rounded-full border-4 border-gray-300 border-t-gray-700 animate-spin"></div>
 </div>
 
+<!-- BLOQUE DE DONACIONES -->
+<div class="mt-6 mb-6 bg-green-50 border border-green-300 shadow-sm rounded-xl p-4">
+    <h2 class="text-xl font-semibold text-green-800">
+        ¿Quieres ayudar directamente a Milo? 💚
+    </h2>
+    <p class="text-sm text-green-700 mt-1">
+        Milo necesita una cirugía compleja para dejar de cojear.  
+        Si no quieres participar en la rifa pero sí deseas ayudarlo, puedes hacer una donación directa.
+    </p>
+
+    <a href="/donar/"
+       class="inline-block mt-3 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow">
+        HAZ UNA DONACIÓN
+    </a>
+</div>
+
 {% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{% static 'js/checkout_pro.js' %}" defer></script>
 <script src="{% static 'js/detail_page.js' %}" defer></script>
 {% endblock %}

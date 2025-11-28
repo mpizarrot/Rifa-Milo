@@ -5,137 +5,82 @@
 {% block title %}Donaciones para Milo{% endblock %}
 
 {% block content %}
-<div id="mp-config"
-     data-public-key="{{ MP_PUBLIC_KEY }}">
-</div>
-
 <div class="max-w-2xl mx-auto">
   <div class="mb-6">
     <h1 class="text-2xl font-bold mb-2">Ayuda a Milo con una donación 💚</h1>
 
-    {% if request.GET.pending %}
-    <div class="mt-4 p-3 rounded-md bg-yellow-50 border border-yellow-300">
-        <p class="text-yellow-800 font-semibold">
-        Tu pago está siendo procesado 💛  
-        Te avisaremos por correo apenas se confirme.  
-        ¡Gracias por ayudar a Milo!
-        </p>
+    <p class="text-gray-700">
+      Para aportar, realiza una transferencia con el monto que quieras usando los datos de abajo.
+      ¡Cada aporte nos acerca a la operación que Milo necesita!
+    </p>
+  </div>
+
+  <div class="rounded-lg border bg-white p-4 shadow-sm transfer-data-block">
+    <div class="text-left">
+      <p class="text-sm font-semibold mb-2">Datos para transferencia</p>
+
+      <dl class="text-sm space-y-1">
+        <div class="flex justify-between">
+          <dt class="text-gray-500">Banco</dt>
+          <dd class="font-medium">Mercado Pago</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-gray-500">Tipo de cuenta</dt>
+          <dd class="font-medium">Cuenta Vista</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-gray-500">N° de cuenta</dt>
+          <dd class="font-medium">1052076645</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-gray-500">RUT</dt>
+          <dd class="font-medium">20.096.901-4</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-gray-500">Nombre</dt>
+          <dd class="font-medium">Marcelo Andrés Pizarro Tapia</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-gray-500">Correo</dt>
+          <dd class="font-medium">marcelo.pizarrotapia@gmail.com</dd>
+        </div>
+      </dl>
     </div>
-    {% endif %}
-    <br>
-    <a href="/"
-       class="inline-block px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">
+
+    <button
+      type="button"
+      class="mt-4 px-3 py-2 text-xs rounded-md border bg-gray-50 hover:bg-gray-100"
+      data-transfer-name="Marcelo Andrés Pizarro Tapia"
+      data-transfer-rut="20096901-4"
+      data-transfer-bank="Mercado Pago"
+      data-transfer-account-type="Cuenta Vista"
+      data-transfer-account-number="1052076645"
+      data-transfer-email="marcelo.pizarrotapia@gmail.com"
+    >
+      Copiar datos
+    </button>
+
+    <p class="js-copy-feedback mt-2 text-xs text-green-600 hidden">
+      Datos copiados ✅.
+    </p>
+  </div>
+
+  <!-- GIF de Milo -->
+  <div class="mt-4 mb-6 flex justify-center">
+    <img
+      src="{% static 'img/milo_feliz.gif' %}"
+      alt="Milo feliz"
+      class="max-w-xs rounded-xl shadow"
+    >
+  </div>
+
+  <!-- Botón para volver al inicio -->
+  <div class="mt-4 mb-6 flex justify-center">
+    <a href="{% url 'raffle_detail' %}"
+      class="inline-block px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">
       Volver al inicio
     </a>
-    
   </div>
-
-  <div class="bg-white rounded-xl shadow p-4 space-y-4">
-    <div>
-      <label for="donation_amount" class="block text-sm font-medium mb-1">
-        Monto de tu donación (CLP)
-      </label>
-      <input
-        id="donation_amount"
-        type="number"
-        min="1000"
-        step="500"
-        placeholder="Ej: 5000"
-        class="w-full border rounded px-3 py-2"
-      >
-      <p class="text-xs text-gray-500 mt-1">
-        Sugerencia: mínimo $1.000 CLP, puedes escribir el monto que quieras.
-      </p>
-    </div>
-
-    <div>
-      <label class="block text-sm font-medium mb-1">
-        Nombre (opcional)
-      </label>
-      <input id="buyer_name" type="text"
-            class="w-full border rounded px-3 py-2">
-      <p class="text-xs text-gray-500 mt-1">
-        Déjalo en blanco si prefieres que tu donación sea anónima.
-      </p>
-    </div>
-
-    <div>
-      <label class="block text-sm font-medium mb-1">
-        Email (opcional)
-      </label>
-      <input id="buyer_email" type="email"
-            class="w-full border rounded px-3 py-2">
-      <p class="text-xs text-gray-500 mt-1">
-        Solo si quieres que podamos contactarte o enviarte un agradecimiento.
-      </p>
-    </div>
-
-    <div class="rounded-lg border p-3 text-sm bg-gray-50">
-      <div><strong>Monto:</strong> $<span id="donation-amount-display">0</span> CLP</div>
-      <p class="text-xs text-gray-500 mt-1">
-        El botón de pago aparecerá cuando ingreses un monto válido y tus datos.
-      </p>
-    </div>
-
-    <!-- Contenedor del Wallet Brick -->
-    <div id="walletBrick_container" class="mt-4 hidden"></div>
-  </div>
-
-  <!-- Datos de transferencia, por si alguien prefiere donar así -->
-  <div class="mt-8">
-    <div class="rounded-lg border bg-white p-4 shadow-sm transfer-data-block">
-      <div class="text-left">
-        <p class="text-sm font-semibold mb-2">¿Prefieres donar por transferencia bancaria?</p>
-
-        <dl class="text-sm space-y-1">
-          <div class="flex justify-between">
-            <dt class="text-gray-500">Banco</dt>
-            <dd class="font-medium">Mercado Pago</dd>
-          </div>
-          <div class="flex justify-between">
-            <dt class="text-gray-500">Tipo de cuenta</dt>
-            <dd class="font-medium">Cuenta Vista</dd>
-          </div>
-          <div class="flex justify-between">
-            <dt class="text-gray-500">N° de cuenta</dt>
-            <dd class="font-medium">1052076645</dd>
-          </div>
-          <div class="flex justify-between">
-            <dt class="text-gray-500">RUT</dt>
-            <dd class="font-medium">20.096.901-4</dd>
-          </div>
-          <div class="flex justify-between">
-            <dt class="text-gray-500">Nombre</dt>
-            <dd class="font-medium">Marcelo Andrés Pizarro Tapia</dd>
-          </div>
-          <div class="flex justify-between">
-            <dt class="text-gray-500">Correo</dt>
-            <dd class="font-medium">marcelo.pizarrotapia@gmail.com</dd>
-          </div>
-        </dl>
-      </div>
-
-      <button
-        type="button"
-        class="mt-4 px-3 py-2 text-xs rounded-md border bg-gray-50 hover:bg-gray-100"
-        data-transfer-name="Marcelo Andrés Pizarro Tapia"
-        data-transfer-rut="20096901-4"
-        data-transfer-bank="Mercado Pago"
-        data-transfer-account-type="Cuenta Vista"
-        data-transfer-account-number="1052076645"
-        data-transfer-email="marcelo.pizarrotapia@gmail.com"
-      >
-        Copiar datos
-      </button>
-
-      <p class="js-copy-feedback mt-2 text-xs text-green-600 hidden">
-        Datos copiados ✅.
-      </p>
-    </div>
-  </div>
+  
 </div>
-{% endblock %}
-
-{% block extra_scripts %}
-  <script src="{% static 'js/donation.js' %}" defer></script>
 {% endblock %}
