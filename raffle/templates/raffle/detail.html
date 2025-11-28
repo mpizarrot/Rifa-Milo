@@ -35,16 +35,6 @@
   <p class="mt-2">Precio por número: <span class="font-semibold">${{ raffle.price_clp }}</span> CLP</p>
 </div>
 
-{% if request.GET.pending %}
-<div class="mt-4 p-3 rounded-md bg-yellow-50 border border-yellow-300">
-    <p class="text-yellow-800 font-semibold">
-    Tu pago está siendo procesado 💛  
-    Te avisaremos por correo apenas se confirme.  
-    ¡Gracias por ayudar a Milo!
-    </p>
-</div>
-{% endif %}
-
 <section class="mb-8 bg-white rounded-xl shadow p-4">
   <div class="flex flex-col md:flex-row md:items-center gap-4">
     <div class="flex-1">

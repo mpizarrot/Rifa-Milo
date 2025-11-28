@@ -15,70 +15,63 @@
     <h1 class="text-2xl font-bold mb-3">¡Reserva realizada!</h1>
     <p class="text-gray-700 mb-4">
       Tus números han sido reservados por <span class="font-semibold">12 horas</span> para que puedas
-      hacer la transferencia con calma.  
+      hacer la transferencia con calma.
       Recuerda enviar el comprobante al correo indicado más abajo, mencionando tu nombre
       y los números reservados 🐶💚
     </p>
 
     <div class="mt-8">
       <!-- BLOQUE TRANSFERENCIA -->
-        <div class="rounded-lg border bg-white p-4 shadow-sm transfer-data-block">
-          <div class="text-left">
-            <p class="text-sm font-semibold mb-2">Datos para transferencia</p>
+      <div class="rounded-lg border bg-white p-4 shadow-sm transfer-data-block">
+        <div class="text-left">
+          <p class="text-sm font-semibold mb-2">Datos para transferencia</p>
 
-            <dl class="text-sm space-y-1">
-              <div class="flex justify-between">
-                <dt class="text-gray-500">Banco</dt>
-                <dd class="font-medium">Mercado Pago</dd>
-              </div>
-              <div class="flex justify-between">
-                <dt class="text-gray-500">Tipo de cuenta</dt>
-                <dd class="font-medium">Cuenta Vista</dd>
-              </div>
-              <div class="flex justify-between">
-                <dt class="text-gray-500">N° de cuenta</dt>
-                <dd class="font-medium">1052076645</dd>
-              </div>
-              <div class="flex justify-between">
-                <dt class="text-gray-500">RUT</dt>
-                <dd class="font-medium">20.096.901-4</dd>
-              </div>
-              <div class="flex justify-between">
-                <dt class="text-gray-500">Nombre</dt>
-                <dd class="font-medium">Marcelo Andrés Pizarro Tapia</dd>
-              </div>
-              <div class="flex justify-between">
-                <dt class="text-gray-500">Correo</dt>
-                <dd class="font-medium">marcelo.pizarrotapia@gmail.com</dd>
-              </div>
-            </dl>
-          </div>
-
-          <button
-            type="button"
-            class="mt-4 px-3 py-2 text-xs rounded-md border bg-gray-50 hover:bg-gray-100"
-            data-transfer-name="Marcelo Andrés Pizarro Tapia"
-            data-transfer-rut="20096901-4"
-            data-transfer-bank="Mercado Pago"
-            data-transfer-account-type="Cuenta Vista"
-            data-transfer-account-number="1052076645"
-            data-transfer-email="marcelo.pizarrotapia@gmail.com"
-          >
-            Copiar datos
-          </button>
-
-          <p class="js-copy-feedback mt-2 text-xs text-green-600 hidden">
-            Datos copiados ✅.
-          </p>
+          <dl class="text-sm space-y-1">
+            <div class="flex justify-between">
+              <dt class="text-gray-500">Banco</dt>
+              <dd class="font-medium">Mercado Pago</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-500">Tipo de cuenta</dt>
+              <dd class="font-medium">Cuenta Vista</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-500">N° de cuenta</dt>
+              <dd class="font-medium">1052076645</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-500">RUT</dt>
+              <dd class="font-medium">20.096.901-4</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-500">Nombre</dt>
+              <dd class="font-medium">Marcelo Andrés Pizarro Tapia</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-gray-500">Correo</dt>
+              <dd class="font-medium">marcelo.pizarrotapia@gmail.com</dd>
+            </div>
+          </dl>
         </div>
+
+        <button
+          type="button"
+          class="mt-4 px-3 py-2 text-xs rounded-md border bg-gray-50 hover:bg-gray-100"
+          data-transfer-name="Marcelo Andrés Pizarro Tapia"
+          data-transfer-rut="20096901-4"
+          data-transfer-bank="Mercado Pago"
+          data-transfer-account-type="Cuenta Vista"
+          data-transfer-account-number="1052076645"
+          data-transfer-email="marcelo.pizarrotapia@gmail.com"
+        >
+          Copiar datos
+        </button>
+
+        <p class="js-copy-feedback mt-2 text-xs text-green-600 hidden">
+          Datos copiados ✅.
+        </p>
+      </div>
     </div>
-    
-  {% else %}
-    <h1 class="text-2xl font-bold mb-3">🎉 ¡Pago confirmado, estás participando en la rifa!</h1>
-    <p class="text-gray-700 mb-4">
-      Tu compra quedó registrada correctamente y ya estás participando por los premios,
-      mientras ayudas a que Milo pueda operarse y vivir sin dolor. 💚
-    </p>
   {% endif %}
 
   <!-- GIF de Milo -->

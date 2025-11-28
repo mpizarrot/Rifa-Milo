@@ -19,8 +19,6 @@ from .models import Raffle, Ticket, Payment
 
 # ========= Utilidades comunes =========
 
-ZERO_DECIMAL_CURRENCIES = {"CLP", "JPY", "PYG"}
-
 def _get_active_raffle():
     return Raffle.objects.filter(is_active=True).order_by("id").first()
 
@@ -343,101 +341,6 @@ def transfer_reserve(request):
         }
     )
 
-@require_POST
-@ratelimit(key="ip", rate="10/m", block=True)
-def reserve_from_failed_payment(request):
-    """
-    Toma el external_reference de un intento fallido de Mercado Pago,
-    obtiene los números que el usuario intentó comprar y los reserva
-    como pago por transferencia (Payment gateway='transfer').
-    """
-    try:
-        body = json.loads(request.body.decode() or "{}")
-    except Exception:
-        return JsonResponse({"error": "JSON inválido"}, status=400)
-
-    external_ref = (body.get("external_reference") or "").strip()
-    if not external_ref:
-        return JsonResponse({"error": "Falta external_reference"}, status=400)
-
-    try:
-        # Payment creado cuando se generó la preferencia de MP
-        p_mp = Payment.objects.get(
-            gateway="mercadopago",
-            gateway_payment_id=external_ref,
-        )
-    except Payment.DoesNotExist:
-        return JsonResponse(
-            {"error": "No encontramos tu intento de pago. Vuelve a elegir tus números."},
-            status=404,
-        )
-
-    raffle = p_mp.raffle
-
-    # Números que intentó comprar
-    chosen_numbers = []
-    if isinstance(p_mp.metadata, dict) and "chosen_numbers" in p_mp.metadata:
-        try:
-            chosen_numbers = [int(n) for n in p_mp.metadata.get("chosen_numbers", [])]
-        except (TypeError, ValueError):
-            chosen_numbers = []
-
-    if not chosen_numbers:
-        return JsonResponse(
-            {"error": "No hay números asociados a este intento de pago."},
-            status=400,
-        )
-
-    now = timezone.now()
-    expires_at = now + timedelta(hours=12)
-
-    with transaction.atomic():
-        # Verificar que sigan disponibles
-        taken = _get_taken_numbers_for_raffle(raffle)
-        conflict = taken.intersection(chosen_numbers)
-        if conflict:
-            return JsonResponse(
-                {
-                    "error": "Algunos números ya no están disponibles. Recarga la página para verlos.",
-                    "conflict_numbers": sorted(conflict),
-                },
-                status=409,
-            )
-
-        total = int(raffle.price_clp) * len(chosen_numbers)
-
-        # Crear Payment de transferencia
-        transfer_payment = Payment.objects.create(
-            raffle=raffle,
-            amount_clp=total,
-            gateway="transfer",
-            gateway_payment_id=f"transfer-{raffle.id}-{uuid4()}",
-            status="pending",
-            buyer_name=p_mp.buyer_name,
-            buyer_email=p_mp.buyer_email,
-            buyer_phone=p_mp.buyer_phone,
-            metadata={
-                "chosen_numbers": chosen_numbers,
-                "from_external_reference": external_ref,
-            },
-            expires_at=expires_at,
-        )
-
-        # Marcar el intento de MP como failed (por si no lo estaba)
-        if p_mp.status != "failed":
-            p_mp.status = "failed"
-            p_mp.save(update_fields=["status"])
-
-    return JsonResponse(
-        {
-            "ok": True,
-            "count": len(chosen_numbers),
-            "chosen_numbers": chosen_numbers,
-            "reserved_until": expires_at.isoformat(),
-            "payment_id": transfer_payment.id,
-        }
-    )
-
 # ============== exportación csv ======================== #
 
 @staff_member_required
@@ -577,19 +480,3 @@ def payment_success(request):
         "is_transfer": (kind == "transfer"),
     }
     return render(request, "raffle/payment_success.html", context)
-
-@require_GET
-def payment_failure(request):
-    """
-    Página limpia para cuando un intento de pago falla.
-    """
-    kind = request.GET.get("kind", "raffle")  # 'raffle' o 'donation'
-    external_ref = request.GET.get("external_reference") or ""
-
-    context = {
-        "kind": kind,
-        "is_donation": (kind == "donation"),
-        "is_raffle": (kind == "raffle"),
-        "external_reference": external_ref,
-    }
-    return render(request, "raffle/payment_failure.html", context)
