@@ -9,7 +9,7 @@
   }
   const csrftoken = getCookie("csrftoken");
 
-  const priceEl = document.getElementById("mp-config");
+  const priceEl = document.getElementById("raffle-config");
   const PRICE = Number(priceEl?.dataset.price || "0");
 
   const grid = document.getElementById("numbers-grid");
@@ -66,7 +66,6 @@
     return;
   }
 
-  // Set global para que lo use checkout_pro.js
   const selected = new Set();
   window.selected = selected;
 
@@ -86,11 +85,6 @@
     const hasSelection = arr.length > 0;
     const hasBuyer = name && email && email.includes("@");
     const readyForPayment = hasSelection && hasBuyer;
-
-    // 🔹 SIEMPRE avisamos a checkout_pro que algo cambió
-    if (typeof window.updateWalletIfReady === "function") {
-      window.updateWalletIfReady();
-    }
 
     // 🔹 Transferencia: opcional que dependa de readyForPayment
     if (transferSection) {

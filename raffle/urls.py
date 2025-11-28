@@ -10,16 +10,8 @@ urlpatterns = [
     path("export/raffle/<int:raffle_id>/tickets.csv", views.export_tickets_csv, name="export_tickets_csv"),
     path("export/raffle/<int:raffle_id>/payments.csv", views.export_payments_csv, name="export_payments_csv"),
 
-    # MP
-    path("mp/create_preference/", views.create_preference, name="create_preference"),
-    path("webhook/mercadopago/", views.mp_webhook, name="mp_webhook"),
     path("transfer/reserve/", views.transfer_reserve, name="transfer_reserve"),
     path("donar/", views.donation_page, name="donation_page"),
-    path(
-        "mp/create_donation_preference/",
-        views.create_donation_preference,
-        name="mp_create_donation_preference",
-    ),
     path("premios/", views.prizes_page, name="prizes_page"),
     path("pago-exitoso/", views.payment_success, name="payment_success"),
     path("pago-fallido/", views.payment_failure, name="payment_failure"),
