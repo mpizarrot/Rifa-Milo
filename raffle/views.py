@@ -321,6 +321,7 @@ def create_preference(request):
             "buyer": buyer,
         },
         "notification_url": notification_url,
+        "statement_descriptor": "RIFA MILO",
     }
 
     if base_url.startswith("https://"):
@@ -885,6 +886,7 @@ def create_donation_preference(request):
             "is_anonymous": is_anonymous,
         },
         "notification_url": notification_url,
+        "statement_descriptor": "RIFA MILO",
     }
 
     if base_url.startswith("https://"):
