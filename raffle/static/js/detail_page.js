@@ -39,10 +39,8 @@
     if (!root) return true; // si no hay grid, no hacemos nada
 
     const buttons = root.querySelectorAll(".number-btn");
-    if (!buttons.length) return true; // si no hay botones, tampoco saltamos
+    if (!buttons.length) return false; // si no hay botones, asumimos que no hay disponibles
 
-    // Consideramos que un número está disponible si el botón NO está disabled
-    // (ajusta esta lógica si tienes otra clase tipo .is-taken)
     return Array.from(buttons).some((btn) => !btn.disabled);
   }
 
