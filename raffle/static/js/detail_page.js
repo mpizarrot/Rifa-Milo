@@ -39,7 +39,7 @@
     if (!root) return true; // si no hay grid, no hacemos nada
 
     const buttons = root.querySelectorAll(".number-btn");
-    if (!buttons.length) return true; // si no hay botones, tampoco saltamos
+    if (!buttons.length) return false; // si no hay botones, asumimos que no hay disponibles
 
     // Consideramos que un número está disponible si el botón NO está disabled
     // (ajusta esta lógica si tienes otra clase tipo .is-taken)
@@ -148,25 +148,40 @@
     });
   });
 
+  function handleGridUpdate(target) {
+    const gridEl =
+      (target?.id === "numbers-grid" && target) ||
+      target?.closest?.("#numbers-grid") ||
+      document.getElementById("numbers-grid");
+    if (!gridEl) return;
+
+    const buttons = gridEl.querySelectorAll(".number-btn");
+    buttons.forEach((btn) => {
+      const n = Number(btn.dataset.number);
+      if (selected.has(n)) {
+        btn.classList.remove("bg-white", "text-gray-800");
+        btn.classList.add(
+          "bg-blue-600",
+          "text-white",
+          "border-blue-600",
+          "is-selected",
+        );
+      }
+    });
+
+    // Después de cargar una nueva página de números, saltar si está llena
+    autoSkipSoldOut(gridEl);
+  }
+
   // Cuando htmx cambia de página en la grilla, re-marcar seleccionados
   document.body.addEventListener("htmx:afterSwap", (e) => {
-    if (e.target && e.target.id === "numbers-grid") {
-      const buttons = e.target.querySelectorAll(".number-btn");
-      buttons.forEach((btn) => {
-        const n = Number(btn.dataset.number);
-        if (selected.has(n)) {
-          btn.classList.remove("bg-white", "text-gray-800");
-          btn.classList.add(
-            "bg-blue-600",
-            "text-white",
-            "border-blue-600",
-            "is-selected",
-          );
-        }
-      });
-      // Después de cargar una nueva página de números, saltar si está llena
-      autoSkipSoldOut(e.target);
-    }
+    const swapTarget = e?.detail?.target || e?.detail?.elt || e.target;
+    handleGridUpdate(swapTarget);
+  });
+
+  // htmx dispara htmx:load sobre el contenido nuevo; lo usamos como respaldo
+  document.body.addEventListener("htmx:load", (e) => {
+    handleGridUpdate(e.target);
   });
 
   async function reserveByTransfer() {
