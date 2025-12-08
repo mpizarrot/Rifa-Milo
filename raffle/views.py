@@ -1,15 +1,14 @@
-import json, requests, csv, hmac, hashlib, urllib.parse
+import json, csv
 from datetime import timedelta
 from uuid import uuid4
 
 from math import ceil
-from django.conf import settings
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_GET, require_POST
-from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django_ratelimit.decorators import ratelimit
-from django.db import transaction, IntegrityError
+from django.db import transaction
 from django.utils import timezone
 from django.urls import reverse
 from django.template.loader import render_to_string
@@ -19,8 +18,6 @@ from .models import Raffle, Ticket, Payment
 
 
 # ========= Utilidades comunes =========
-
-ZERO_DECIMAL_CURRENCIES = {"CLP", "JPY", "PYG"}
 
 def _get_active_raffle():
     return Raffle.objects.filter(is_active=True).order_by("id").first()
@@ -55,16 +52,6 @@ def _get_taken_numbers_for_raffle(raffle: Raffle) -> set[int]:
 
     return taken
 
-def _mp_headers(idempotency_key: str | None = None):
-    headers = {
-        "Authorization": f"Bearer {settings.MP_ACCESS_TOKEN}",
-        "Content-Type": "application/json",
-    }
-    if idempotency_key:
-        headers["X-Idempotency-Key"] = idempotency_key
-    return headers
-
-
 # ========= Vistas HTML =========
 
 PAGE_SIZE = 100  # 10 x 10
@@ -76,7 +63,6 @@ def raffle_detail(request):
     if not raffle:
         return render(request, "raffle/detail.html", {
             "raffle": None,
-            "MP_PUBLIC_KEY": getattr(settings, "MP_PUBLIC_KEY", ""),
         })
 
     total = raffle.numbers_total
@@ -95,7 +81,6 @@ def raffle_detail(request):
         "current_page": current_page,
         "page_size": PAGE_SIZE,
         "first_page_numbers": first_page_numbers,
-        "MP_PUBLIC_KEY": getattr(settings, "MP_PUBLIC_KEY", ""),
     })
 
 
@@ -239,149 +224,6 @@ def _confirm_tickets_from_payment_id(gateway_payment_id: str):
 
     return True
 
-# ========= Crear pedido Mercado Pago =========
-
-@require_POST
-@ratelimit(key="ip", rate="10/m", block=True)
-def create_preference(request):
-    raffle = _get_active_raffle()
-    if not raffle:
-        return JsonResponse({"error": "No hay rifa activa"}, status=400)
-
-    try:
-        data = json.loads(request.body.decode())
-    except Exception:
-        return JsonResponse({"error": "JSON inválido"}, status=400)
-
-    chosen_numbers = data.get("chosen_numbers", [])
-    buyer = data.get("buyer", {}) or {}
-
-    if not chosen_numbers:
-        return JsonResponse({"error": "Debes seleccionar números"}, status=400)
-
-    # límite razonable por request para evitar payloads enormes
-    if len(chosen_numbers) > 100:
-        return JsonResponse({"error": "Demasiados números en una sola compra"}, status=400)
-    
-    try:
-        chosen_numbers = [int(n) for n in chosen_numbers]
-    except (TypeError, ValueError):
-        return JsonResponse({"error": "Números inválidos"}, status=400)
-    
-    for n in chosen_numbers:
-        if n < 1 or n > raffle.numbers_total:
-            return JsonResponse({"error": f"Número fuera de rango: {n}"}, status=400)
-    
-    name = (buyer.get("name") or "").strip()
-    email = (buyer.get("email") or "").strip()
-    phone = (buyer.get("phone") or "").strip()
-
-    if not name or not email or "@" not in email:
-        return JsonResponse({"error": "Nombre y correo válidos son obligatorios"}, status=400)
-    
-    quantity = len(chosen_numbers)
-    total = int(raffle.price_clp) * quantity
-    external_reference = f"raffle-{raffle.id}-{int(timezone.now().timestamp())}"
-
-    base_url = getattr(settings, "MP_PUBLIC_BASE_URL", "").rstrip("/")
-    if not base_url:
-        if not settings.DEBUG:
-            return JsonResponse({"error": "MP_PUBLIC_BASE_URL no configurado en el servidor"}, status=500)
-        base_url = request.build_absolute_uri("/").rstrip("/")
-
-    success_url = f"{base_url}{reverse('payment_success')}?kind=raffle"
-    failure_url = f"{base_url}{reverse('payment_failure')}?kind=raffle"
-    pending_url = f"{base_url}/?pending=1"
-    notification_url = f"{base_url}{reverse('mp_webhook')}"
-
-    print("MP success_url:", success_url)
-    print("MP notification_url:", notification_url)
-
-    pref_body = {
-        "items": [
-            {
-                "id": f"raffle-{raffle.id}",
-                "title": raffle.title,
-                "quantity": quantity,
-                "unit_price": float(raffle.price_clp),
-                "currency_id": "CLP",
-                "category_id": "services",
-                "description": f"Participación en la rifa '{raffle.title}' con {quantity} número(s)",
-            }
-        ],
-        "back_urls": {
-            "success": success_url,
-            "failure": failure_url,
-            "pending": pending_url,
-        },
-        "external_reference": external_reference,
-        "metadata": {
-            "chosen_numbers": chosen_numbers,
-            "raffle_id": raffle.id,
-            "buyer": buyer,
-        },
-        "notification_url": notification_url,
-        "statement_descriptor": "RIFA MILO"
-    }
-
-    if base_url.startswith("https://"):
-        pref_body["auto_return"] = "approved"
-
-    resp = requests.post(
-        "https://api.mercadopago.com/checkout/preferences",
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {settings.MP_ACCESS_TOKEN}",
-        },
-        data=json.dumps(pref_body),
-        timeout=20,
-    )
-
-    try:
-        body = resp.json()
-    except Exception:
-        return JsonResponse(
-            {"error": "Respuesta inválida de Mercado Pago", "detail": resp.text},
-            status=400,
-        )
-
-    if resp.status_code >= 300 or "id" not in body:
-        print("MP create_pref error:", body)
-        return JsonResponse(
-            {"error": "Error al crear preferencia", "detail": body},
-            status=400,
-        )
-
-    preference_id = body["id"]
-    external_reference = pref_body["external_reference"]
-
-    # Guarda Payment "pendiente" asociado al external_reference
-    client_ip = request.META.get("REMOTE_ADDR")
-    user_agent = request.META.get("HTTP_USER_AGENT", "")
-
-    Payment.objects.update_or_create(
-        gateway_payment_id=external_reference,
-        defaults=dict(
-            raffle=raffle,
-            amount_clp=total,
-            status="pending",
-            buyer_name=name,
-            buyer_email=email,
-            buyer_phone=phone,
-            chosen_number=0,
-            metadata={
-                "chosen_numbers": chosen_numbers,
-                "mp_preference_id": preference_id,
-                "client_ip": client_ip,
-                "user_agent": user_agent,
-            },
-            gateway="mercadopago",
-        ),
-    )
-
-
-    return JsonResponse({"preference_id": preference_id})
-
 # ========= Reservar Transferencia 12 horas =========
 
 @require_POST
@@ -499,262 +341,6 @@ def transfer_reserve(request):
         }
     )
 
-@require_POST
-@ratelimit(key="ip", rate="10/m", block=True)
-def reserve_from_failed_payment(request):
-    """
-    Toma el external_reference de un intento fallido de Mercado Pago,
-    obtiene los números que el usuario intentó comprar y los reserva
-    como pago por transferencia (Payment gateway='transfer').
-    """
-    try:
-        body = json.loads(request.body.decode() or "{}")
-    except Exception:
-        return JsonResponse({"error": "JSON inválido"}, status=400)
-
-    external_ref = (body.get("external_reference") or "").strip()
-    if not external_ref:
-        return JsonResponse({"error": "Falta external_reference"}, status=400)
-
-    try:
-        # Payment creado cuando se generó la preferencia de MP
-        p_mp = Payment.objects.get(
-            gateway="mercadopago",
-            gateway_payment_id=external_ref,
-        )
-    except Payment.DoesNotExist:
-        return JsonResponse(
-            {"error": "No encontramos tu intento de pago. Vuelve a elegir tus números."},
-            status=404,
-        )
-
-    raffle = p_mp.raffle
-
-    # Números que intentó comprar
-    chosen_numbers = []
-    if isinstance(p_mp.metadata, dict) and "chosen_numbers" in p_mp.metadata:
-        try:
-            chosen_numbers = [int(n) for n in p_mp.metadata.get("chosen_numbers", [])]
-        except (TypeError, ValueError):
-            chosen_numbers = []
-
-    if not chosen_numbers:
-        return JsonResponse(
-            {"error": "No hay números asociados a este intento de pago."},
-            status=400,
-        )
-
-    now = timezone.now()
-    expires_at = now + timedelta(hours=12)
-
-    with transaction.atomic():
-        # Verificar que sigan disponibles
-        taken = _get_taken_numbers_for_raffle(raffle)
-        conflict = taken.intersection(chosen_numbers)
-        if conflict:
-            return JsonResponse(
-                {
-                    "error": "Algunos números ya no están disponibles. Recarga la página para verlos.",
-                    "conflict_numbers": sorted(conflict),
-                },
-                status=409,
-            )
-
-        total = int(raffle.price_clp) * len(chosen_numbers)
-
-        # Crear Payment de transferencia
-        transfer_payment = Payment.objects.create(
-            raffle=raffle,
-            amount_clp=total,
-            gateway="transfer",
-            gateway_payment_id=f"transfer-{raffle.id}-{uuid4()}",
-            status="pending",
-            buyer_name=p_mp.buyer_name,
-            buyer_email=p_mp.buyer_email,
-            buyer_phone=p_mp.buyer_phone,
-            metadata={
-                "chosen_numbers": chosen_numbers,
-                "from_external_reference": external_ref,
-            },
-            expires_at=expires_at,
-        )
-
-        # Marcar el intento de MP como failed (por si no lo estaba)
-        if p_mp.status != "failed":
-            p_mp.status = "failed"
-            p_mp.save(update_fields=["status"])
-
-    return JsonResponse(
-        {
-            "ok": True,
-            "count": len(chosen_numbers),
-            "chosen_numbers": chosen_numbers,
-            "reserved_until": expires_at.isoformat(),
-            "payment_id": transfer_payment.id,
-        }
-    )
-
-# ========= Webhook Mercado Pago =========
-
-@csrf_exempt
-@require_POST
-def mp_webhook(request):
-    """
-    Webhook de notificaciones de Mercado Pago con validación HMAC.
-    - Validación estricta solo para notificaciones de tipo 'payment' con data.id.
-    - Cuando el pago queda approved+accredited, confirma Payment y crea Tickets
-      usando el preference_id (que guardamos como gateway_payment_id).
-    """
-    # 1) Body solo para logging y para sacar 'type'
-    try:
-        payload = json.loads(request.body.decode() or "{}")
-    except Exception:
-        payload = {}
-
-    print(">>> MP WEBHOOK REAL")
-    print("   Method:", request.method)
-    print("   Payload:", payload)
-
-    # 2) Headers relevantes
-    xSignature = request.headers.get("x-signature") or request.META.get("HTTP_X_SIGNATURE", "")
-    xRequestId = request.headers.get("x-request-id") or request.META.get("HTTP_X_REQUEST_ID", "")
-
-    print("   x-signature:", xSignature)
-    print("   x-request-id:", xRequestId)
-
-    if not xSignature:
-        print("   >> Falta x-signature, ignorando notificación (pero respondo 200)")
-        return HttpResponse("missing signature", status=200)
-
-    # 3) Query params (equivalente a request.url.query)
-    query_string = request.META.get("QUERY_STRING", "")
-    queryParams = urllib.parse.parse_qs(query_string)
-
-    # data.id primero (payments), si no, id (merchant_order / otros)
-    dataID = queryParams.get("data.id", [""])[0] or queryParams.get("id", [""])[0]
-    print("   data.id (url):", dataID)
-
-    # Tipo de notificación: payment / merchant_order / etc
-    notif_type = str(
-        queryParams.get("type", [""])[0]
-        or payload.get("type")
-        or payload.get("topic")
-        or ""
-    ).lower()
-
-    print("   notif_type:", notif_type, "dataID:", dataID)
-
-    # Solo exigimos HMAC estricto cuando es payment con data.id
-    require_strict_hmac = (notif_type == "payment" and bool(dataID))
-
-    # 4) Separar ts y v1 del x-signature
-    ts = None
-    hash_v1 = None
-    parts = xSignature.split(",")
-    for part in parts:
-        keyValue = part.split("=", 1)
-        if len(keyValue) == 2:
-            key = keyValue[0].strip()
-            value = keyValue[1].strip()
-            if key == "ts":
-                ts = value
-            elif key == "v1":
-                hash_v1 = value
-
-    print("   ts:", ts)
-    print("   v1 (header hash):", hash_v1)
-
-    if not hash_v1:
-        print("   >> No se encontró v1 en x-signature, ignorando notificación")
-        return HttpResponse("invalid signature format", status=200)
-
-    # 5) Construir manifest EXACTAMENTE como indica MP
-    manifest_parts = []
-    if dataID:
-        manifest_parts.append(f"id:{dataID}")
-    if xRequestId:
-        manifest_parts.append(f"request-id:{xRequestId}")
-    if ts:
-        manifest_parts.append(f"ts:{ts}")
-    manifest = ";".join(manifest_parts) + ";"
-
-    print("   manifest:", manifest)
-
-    # 6) Obtener secret desde settings
-    secret = getattr(settings, "MP_WEBHOOK_SECRET", "")
-    print("   SECRET LEN:", len(secret))
-
-    if not secret:
-        print("   >> MP_WEBHOOK_SECRET no configurado, NO se valida firma (solo dev)")
-        # En dev puedes dejar pasar todo, en prod deberías dejar esto en False
-        return HttpResponse("secret not configured", status=200)
-
-    # 7) Crear HMAC SHA256(manifest, secret)
-    hmac_obj = hmac.new(secret.encode(), msg=manifest.encode(), digestmod=hashlib.sha256)
-    sha = hmac_obj.hexdigest()
-
-    print("   computed HMAC:", sha)
-    print("   header v1:", hash_v1)
-
-    if require_strict_hmac and sha != hash_v1:
-        print("   >> HMAC verification FAILED para payment, ignorando notificación")
-        return HttpResponse("invalid signature", status=200)
-
-    if require_strict_hmac:
-        print("   >> HMAC verification PASSED para payment")
-    else:
-        # Para merchant_order / otros, solo logueamos; pueden no calzar con este manifest
-        if sha != hash_v1:
-            print("   >> HMAC mismatch en tópico no crítico (p.ej. merchant_order). Solo log.")
-        else:
-            print("   >> HMAC match en tópico no crítico.")
-
-    # === A partir de aquí, si es payment+data.id y HMAC es válido, confiamos en el evento ===
-
-    # Caso payment → consultamos /v1/payments/{id}
-    if notif_type == "payment" and dataID:
-        pr = requests.get(
-            f"https://api.mercadopago.com/v1/payments/{dataID}",
-            headers=_mp_headers(),
-            timeout=20,
-        )
-        print("   /v1/payments status:", pr.status_code)
-        if pr.status_code >= 300:
-            return HttpResponse("fetch error", status=200)
-
-        pdata = pr.json()
-        pstatus = (pdata.get("status") or "").lower()          # approved / rejected / pending...
-        pdetail = (pdata.get("status_detail") or "").lower()   # accredited / ...
-        preference_id = str(pdata.get("preference_id") or "")
-        external_ref  = str(pdata.get("external_reference") or "")
-
-        print("   payment status:", pstatus, "detail:", pdetail)
-        print("   preference_id:", preference_id, "external_reference:", external_ref)
-
-        # Confirmar pago y crear tickets cuando esté approved+accredited
-        if pstatus == "approved" and pdetail == "accredited" and external_ref:
-            print("   >> Pago aprobado, confirmando tickets para external_ref:", external_ref)
-            _confirm_tickets_from_payment_id(external_ref)
-        elif pstatus in ("rejected", "cancelled") and preference_id:
-            print("   >> Pago rechazado/cancelado, marcando Payment como failed:", preference_id)
-            # Buscamos por el mp_preference_id que guardamos en metadata
-            qs = Payment.objects.filter(
-                gateway="mercadopago",
-                metadata__mp_preference_id=preference_id,
-            )
-            updated = qs.update(status="failed")
-            print(f"   >> Payments marcados como failed: {updated}")
-
-        return HttpResponse("ok", status=200)
-
-    # Caso merchant_order (solo log por ahora)
-    if notif_type == "merchant_order" and dataID:
-        print("   merchant_order id:", dataID)
-        return HttpResponse("ok", status=200)
-
-    # Otros tópicos → responder 200 para que MP no reintente eternamente
-    return HttpResponse("ignored", status=200)
-
 # ============== exportación csv ======================== #
 
 @staff_member_required
@@ -802,145 +388,7 @@ def donation_page(request):
     raffle = _get_active_raffle()
     return render(request, "raffle/donate.html", {
         "raffle": raffle,
-        "MP_PUBLIC_KEY": getattr(settings, "MP_PUBLIC_KEY", ""),
     })
-
-
-@require_POST
-@ratelimit(key="ip", rate="10/m", block=True)
-def create_donation_preference(request):
-    """
-    Crea una preferencia de MercadoPago para una DONACIÓN (monto libre).
-    Ahora el donante puede ser anónimo: solo se exige el monto.
-    """
-    raffle = _get_active_raffle()
-    if not raffle:
-        return JsonResponse({"error": "No hay rifa activa"}, status=400)
-
-    try:
-        data = json.loads(request.body.decode())
-    except Exception:
-        return JsonResponse({"error": "JSON inválido"}, status=400)
-
-    amount_clp = int(data.get("amount_clp") or 0)
-    buyer = data.get("buyer") or {}
-
-    if amount_clp <= 0:
-        return JsonResponse({"error": "Debes ingresar un monto válido"}, status=400)
-
-    # Datos opcionales (pueden venir vacíos)
-    name_raw = (buyer.get("name") or "").strip()
-    email_raw = (buyer.get("email") or "").strip()
-    phone = ""
-
-    # Para el modelo Payment, estos campos no aceptan null, así que usamos valores seguros
-    buyer_name = name_raw or "Anónimo"
-    if email_raw and "@" in email_raw:
-        buyer_email = email_raw
-        is_anonymous = False
-    else:
-        # Email dummy solo para cumplir la validación del modelo
-        buyer_email = f"anon_{uuid4().hex[:10]}@example.com"
-        is_anonymous = True
-
-    external_reference = f"donation-{raffle.id}-{int(timezone.now().timestamp())}"
-
-    base_url = getattr(
-        settings,
-        "MP_PUBLIC_BASE_URL",
-        request.build_absolute_uri("/").rstrip("/")
-    )
-
-    success_url = f"{base_url}{reverse('payment_success')}?kind=donation"
-    failure_url = f"{base_url}{reverse('payment_failure')}?kind=donation"
-    pending_url = f"{base_url}/donar/?pending=1"
-    notification_url = f"{base_url}{reverse('mp_webhook')}"
-
-    pref_body = {
-        "items": [
-            {
-                "id": f"donation-{raffle.id}",
-                "title": f"Donación para {raffle.title}",
-                "quantity": 1,
-                "unit_price": float(amount_clp),
-                "currency_id": "CLP",
-                "category_id": "donations",
-                "description": f"Donación voluntaria para la rifa '{raffle.title}'",
-            }
-        ],
-        "back_urls": {
-            "success": success_url,
-            "failure": failure_url,
-            "pending": pending_url,
-        },
-        "external_reference": external_reference,
-        "metadata": {
-            "is_donation": True,
-            "raffle_id": raffle.id,
-            "buyer": {
-                "name": name_raw,
-                "email": email_raw,
-                "phone": phone,
-            },
-            "amount_clp": amount_clp,
-            "is_anonymous": is_anonymous,
-        },
-        "notification_url": notification_url,
-        "statement_descriptor": "RIFA MILO"
-    }
-
-    if base_url.startswith("https://"):
-        pref_body["auto_return"] = "approved"
-
-    resp = requests.post(
-        "https://api.mercadopago.com/checkout/preferences",
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {settings.MP_ACCESS_TOKEN}",
-        },
-        data=json.dumps(pref_body),
-        timeout=20,
-    )
-
-    try:
-        body = resp.json()
-    except Exception:
-        return JsonResponse(
-            {"error": "Respuesta inválida de Mercado Pago", "detail": resp.text},
-            status=400,
-        )
-
-    if resp.status_code >= 300 or "id" not in body:
-        print("MP create_donation_pref error:", body)
-        return JsonResponse(
-            {"error": "Error al crear preferencia", "detail": body},
-            status=400,
-        )
-
-    preference_id = body["id"]
-
-    Payment.objects.update_or_create(
-        gateway_payment_id=external_reference,
-        defaults=dict(
-            raffle=raffle,
-            amount_clp=amount_clp,
-            status="pending",
-            buyer_name=buyer_name,
-            buyer_email=buyer_email,
-            buyer_phone=phone,
-            chosen_number=0,
-            metadata={
-                "is_donation": True,
-                "mp_preference_id": preference_id,
-                "amount_clp": amount_clp,
-                "buyer_raw": buyer,
-                "is_anonymous": is_anonymous,
-            },
-            gateway="mercadopago",
-        ),
-    )
-
-    return JsonResponse({"preference_id": preference_id})
 
 # ============== premios ======================== #
 
@@ -1022,9 +470,7 @@ def prizes_page(request):
 @require_GET
 def payment_success(request):
     """
-    Página limpia que se muestra cuando:
-    - MP redirige con pago aprobado (rifa o donación).
-    - Se reserva por transferencia (kind=transfer).
+    Página de confirmación genérica para reservas o pagos exitosos.
     """
     kind = request.GET.get("kind", "raffle")  # 'raffle', 'donation' o 'transfer'
 
@@ -1034,21 +480,3 @@ def payment_success(request):
         "is_transfer": (kind == "transfer"),
     }
     return render(request, "raffle/payment_success.html", context)
-
-from django.views.decorators.http import require_GET
-
-@require_GET
-def payment_failure(request):
-    """
-    Página limpia para cuando MP redirige con pago rechazado.
-    """
-    kind = request.GET.get("kind", "raffle")  # 'raffle' o 'donation'
-    external_ref = request.GET.get("external_reference") or ""
-
-    context = {
-        "kind": kind,
-        "is_donation": (kind == "donation"),
-        "is_raffle": (kind == "raffle"),
-        "external_reference": external_ref,
-    }
-    return render(request, "raffle/payment_failure.html", context)

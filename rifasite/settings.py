@@ -75,10 +75,3 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
-
-# Mercado Pago
-MP_ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN")
-MP_PUBLIC_KEY = os.getenv("MP_PUBLIC_KEY")
-MP_WEBHOOK_SECRET = os.getenv("MP_WEBHOOK_SECRET")
-MP_CURRENCY = "CLP"
-MP_PUBLIC_BASE_URL = os.getenv("MP_PUBLIC_BASE_URL")
